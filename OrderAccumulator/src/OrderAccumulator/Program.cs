@@ -1,8 +1,6 @@
 using System;
-using System.IO;
 using System.Threading;
 using OrderAccumulator.Core;
-using QuickFix;
 
 namespace OrderAccumulator
 {
@@ -22,7 +20,9 @@ namespace OrderAccumulator
 
                 // Print welcome message
                 exposureState.PrintState();
-                Console.WriteLine("📡 Service ready (FIX bootstrap in PHASE 3)\n");
+                Console.WriteLine();
+
+                Console.WriteLine("📡 Service ready (FIX integration in progress)\n");
                 Console.WriteLine("Press Ctrl+C to exit gracefully.\n");
 
                 // Keep the application running
