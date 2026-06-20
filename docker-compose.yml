@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  accumulator:
+    build:
+      context: .
+      dockerfile: OrderAccumulator/Dockerfile
+    ports:
+      - "9999:9999"
+    volumes:
+      - ./OrderAccumulator/store:/app/store
+      - ./OrderAccumulator/log:/app/log
+    networks:
+      - fix-network
+    environment:
+      - DOTNET_URLS=http://+:9999
+
+  backend:
+    build:
+      context: .
+      dockerfile: OrderGenerator.Backend/Dockerfile
+    ports:
+      - "5000:5000"
+    depends_on:
+      - accumulator
+    networks:
+      - fix-network
+    environment:
+      - ASPNETCORE_URLS=http://+:5000
+      - ASPNETCORE_ENVIRONMENT=Development
+
+  frontend:
+    build:
+      context: .
+      dockerfile: OrderGenerator.Frontend/Dockerfile
+    ports:
+      - "5173:5173"
+    networks:
+      - fix-network
+    environment:
+      - VITE_API_URL=http://backend:5000
+
+networks:
+  fix-network:
+    driver: bridge

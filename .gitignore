@@ -198,6 +198,22 @@ PublishScripts/
 
 # NuGet Packages
 *.nupkg
+
+# Project-specific: FIX Protocol storage and logs
+OrderAccumulator/store/
+OrderAccumulator/log/
+OrderGenerator.Backend/store/
+OrderGenerator.Backend/log/
+
+# Project-specific: Node/npm
+node_modules/
+dist/
+npm-debug.log*
+yarn-debug.log*
+
+# Project-specific: Environment files
+.env
+.env.local
 # NuGet Symbol Packages
 *.snupkg
 # The packages folder can be ignored because of Package Restore
