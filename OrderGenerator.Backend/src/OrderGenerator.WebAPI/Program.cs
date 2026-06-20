@@ -16,7 +16,7 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost", "http://frontend", "http://frontend:5173")
+        policy.SetIsOriginAllowed(_ => true)
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials();
@@ -29,14 +29,16 @@ var app = builder.Build();
 // Initialize FIX Initiator
 try
 {
-    string fixConfigPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "fix.cfg");
+    // Load FIX configuration from bin directory (copied during build)
+    string fixConfigPath = Path.Combine(AppContext.BaseDirectory, "fix.cfg");
+    
     if (!File.Exists(fixConfigPath))
     {
-        fixConfigPath = "/app/fix.cfg";  // Docker path
+        throw new FileNotFoundException($"FIX configuration not found at {fixConfigPath}");
     }
     
     fixInitiator.Start(fixConfigPath);
-    Console.WriteLine("[BACKEND] FIX Initiator started");
+    Console.WriteLine($"[BACKEND] FIX Initiator started with config: {fixConfigPath}");
 }
 catch (Exception ex)
 {
@@ -52,6 +54,5 @@ if (app.Environment.IsDevelopment())
 app.UseCors();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHub<OrderHub>("/orderhub");
 
 app.Run();

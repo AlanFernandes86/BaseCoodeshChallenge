@@ -1,7 +1,5 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using OrderAccumulator.Core.Models;
 
@@ -9,7 +7,7 @@ namespace OrderAccumulator.Core
 {
     /// <summary>
     /// Pure domain logic for exposure tracking and order processing.
-    /// Thread-safe, O(1) lookup, zero abstractions.
+    /// Thread-safe via explicit lock for atomic check-and-update.
     /// 
     /// Responsibility: 
     ///   1. Track cumulative exposure per symbol
@@ -23,52 +21,57 @@ namespace OrderAccumulator.Core
     /// </summary>
     public class ExposureState
     {
-        private readonly ConcurrentDictionary<string, decimal> _exposures;
-        private readonly object _orderIdLock = new();
+        // Use a plain Dictionary + lock so check+update is a single atomic operation.
+        // A ConcurrentDictionary would still have a TOCTOU race between reading and writing.
+        private readonly Dictionary<string, decimal> _exposures = new();
+        private readonly object _stateLock = new();
         private long _orderIdCounter = 0;
 
         public ExposureState()
         {
-            _exposures = new ConcurrentDictionary<string, decimal>();
+            // Initialize all valid symbols to zero so PrintState always shows them
+            foreach (var symbol in Constants.ValidSymbols)
+                _exposures[symbol] = 0m;
         }
 
         /// <summary>
-        /// Process an order: check if new exposure would exceed limit, then update state.
-        /// Thread-safe via ConcurrentDictionary atomic operations.
+        /// Process an order: atomically check if new exposure would exceed limit, then update state.
+        /// The entire check+update is inside a lock to prevent TOCTOU races under concurrency.
         /// </summary>
         public ProcessingResult TryProcessOrder(OrderInfo orderInfo)
         {
-            // Calculate exposure impact
             decimal impact = orderInfo.CalculateExposureImpact();
 
-            // Get current exposure for this symbol (default 0 if new)
-            decimal currentExposure = _exposures.TryGetValue(orderInfo.Symbol, out var exp) ? exp : 0m;
-
-            // Calculate what exposure would be AFTER this order
-            decimal newExposure = currentExposure + impact;
-
-            // Check if would exceed limit
-            if (Math.Abs(newExposure) > Constants.ExposureLimitReais)
+            lock (_stateLock)
             {
-                var rejectReason = $"Exposure limit exceeded. Current: {currentExposure:C}, " +
-                                  $"Impact: {impact:C}, Would be: {newExposure:C}. " +
-                                  $"Limit: ±{Constants.ExposureLimitReais:C}";
+                decimal currentExposure = _exposures.TryGetValue(orderInfo.Symbol, out var exp) ? exp : 0m;
+                decimal newExposure = currentExposure + impact;
 
-                return ProcessingResult.CreateRejected(rejectReason, currentExposure);
+                // Check if would exceed limit
+                if (Math.Abs(newExposure) > Constants.ExposureLimitReais)
+                {
+                    var rejectReason = $"Exposure limit exceeded. Current: {currentExposure:C}, " +
+                                      $"Impact: {impact:C}, Would be: {newExposure:C}. " +
+                                      $"Limit: ±{Constants.ExposureLimitReais:C}";
+
+                    Console.WriteLine($"[ORDER REJECTED] {orderInfo.Symbol} | {rejectReason}");
+                    return ProcessingResult.CreateRejected(rejectReason, currentExposure);
+                }
+
+                // Commit the new exposure
+                _exposures[orderInfo.Symbol] = newExposure;
+
+                // Generate unique order ID (inside lock so counter stays consistent)
+                _orderIdCounter++;
+                string dateStr = DateTime.UtcNow.ToString("yyyyMMdd");
+                string orderId = $"ORD-{dateStr}-{_orderIdCounter:D6}";
+
+                Console.WriteLine($"[ORDER ACCEPTED] {orderInfo.Symbol} | " +
+                                $"Exposure: {currentExposure:C} → {newExposure:C} | " +
+                                $"OrderID: {orderId}");
+
+                return ProcessingResult.CreateAccepted(orderId, newExposure);
             }
-
-            // Atomically update exposure state
-            _exposures.AddOrUpdate(orderInfo.Symbol, newExposure, (_, __) => newExposure);
-
-            // Generate unique order ID
-            string orderId = GenerateOrderId();
-
-            // Log successful processing
-            Console.WriteLine($"[ORDER ACCEPTED] {orderInfo.Symbol} | " +
-                            $"Exposure: {currentExposure:C} → {newExposure:C} | " +
-                            $"OrderID: {orderId}");
-
-            return ProcessingResult.CreateAccepted(orderId, newExposure);
         }
 
         /// <summary>
@@ -76,7 +79,8 @@ namespace OrderAccumulator.Core
         /// </summary>
         public decimal GetExposure(string symbol)
         {
-            return _exposures.TryGetValue(symbol, out var exposure) ? exposure : 0m;
+            lock (_stateLock)
+                return _exposures.TryGetValue(symbol, out var exposure) ? exposure : 0m;
         }
 
         /// <summary>
@@ -84,7 +88,8 @@ namespace OrderAccumulator.Core
         /// </summary>
         public IReadOnlyDictionary<string, decimal> GetAllExposures()
         {
-            return _exposures.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            lock (_stateLock)
+                return new Dictionary<string, decimal>(_exposures);
         }
 
         /// <summary>
@@ -103,25 +108,12 @@ namespace OrderAccumulator.Core
         }
 
         /// <summary>
-        /// Reset exposure for a symbol (useful for testing, not production)
+        /// Reset exposure for a symbol (useful for testing)
         /// </summary>
         public void ResetExposure(string symbol)
         {
-            _exposures.TryRemove(symbol, out _);
-        }
-
-        /// <summary>
-        /// Generate unique order ID using thread-safe counter
-        /// Format: ORD-20260620-000001, ORD-20260620-000002, etc
-        /// </summary>
-        private string GenerateOrderId()
-        {
-            lock (_orderIdLock)
-            {
-                _orderIdCounter++;
-                string dateStr = DateTime.UtcNow.ToString("yyyyMMdd");
-                return $"ORD-{dateStr}-{_orderIdCounter:D6}";
-            }
+            lock (_stateLock)
+                _exposures[symbol] = 0m;
         }
     }
 }

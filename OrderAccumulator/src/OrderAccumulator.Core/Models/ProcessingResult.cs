@@ -34,7 +34,7 @@ namespace OrderAccumulator.Core.Models
             return new ProcessingResult
             {
                 Accepted = false,
-                OrderID = string.Empty,
+                OrderID = "NONE",  // FIX tag 37 must not be empty; "NONE" is the standard convention for rejections
                 RejectReason = rejectReason,
                 ResultingExposure = currentExposure
             };

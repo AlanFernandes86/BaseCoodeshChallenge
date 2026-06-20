@@ -30,7 +30,7 @@ namespace OrderGenerator.Application.UseCases
             OrderSide side,
             decimal quantity,
             decimal price,
-            int timeoutMs = 5000)
+            int timeoutMs = 15000)  // Increased from 5000 to 15000 for Docker network latency
         {
             // Generate unique order ID
             string clOrdID = GenerateClientOrderID();

@@ -28,11 +28,12 @@ namespace OrderAccumulator
                 exposureState.PrintState();
                 Console.WriteLine();
 
-                // Load FIX configuration
+                // Load FIX configuration from bin directory (copied during build)
                 string fixConfigPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "fix.cfg");
+                
                 if (!File.Exists(fixConfigPath))
                 {
-                    throw new FileNotFoundException($"FIX config not found: {fixConfigPath}");
+                    throw new FileNotFoundException($"FIX configuration not found at {fixConfigPath}");
                 }
 
                 var settings = new SessionSettings(fixConfigPath);

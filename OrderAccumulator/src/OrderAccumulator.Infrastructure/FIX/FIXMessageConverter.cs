@@ -26,7 +26,7 @@ namespace OrderAccumulator.Infrastructure.FIX
         private const int FIELD_LEAVESQTY = 151;     // LeavesQty
         private const int FIELD_CUMQTY = 14;         // CumQty
         private const int FIELD_AVGPX = 6;           // AvgPx
-        private const int FIELD_TRANSACTTIME = 52;   // TransactTime
+        private const int FIELD_TRANSACTTIME = 60;   // TransactTime
         private const int FIELD_TEXT = 58;           // Text
         private const int FIELD_MSGTYPE = 35;        // MsgType
 
@@ -112,7 +112,7 @@ namespace OrderAccumulator.Infrastructure.FIX
 
                 // Set optional fields
                 execReport.SetField(new StringField(FIELD_CLORDID, clOrdID));                 // Field 11
-                execReport.SetField(new StringField(FIELD_TRANSACTTIME, DateTime.UtcNow.ToString("yyyyMMdd-HHmmss")));  // Field 52
+                execReport.SetField(new StringField(FIELD_TRANSACTTIME, DateTime.UtcNow.ToString("yyyyMMdd-HH:mm:ss")));  // Field 60
                 
                 // Set status message (expose or reason)
                 string statusMsg = result.Accepted 

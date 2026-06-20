@@ -50,7 +50,17 @@ namespace OrderAccumulator.Infrastructure.FIX
         /// </summary>
         public void FromAdmin(QuickFix.Message msg, SessionID sessionID)
         {
-            Console.WriteLine($"[FIX-ADMIN] Received: MsgType={msg.Header.GetString(Tags.MsgType)}");
+            string msgType = msg.Header.GetString(Tags.MsgType);
+            string seqNum = msg.Header.GetString(Tags.MsgSeqNum);
+            Console.WriteLine($"[FIX-ADMIN] 📬 Received admin message:");
+            Console.WriteLine($"  MsgType={msgType} | SeqNum={seqNum}");
+            Console.WriteLine($"  Full: {msg}");
+            
+            // Debug: se receber MsgType=D, alertar ALTO
+            if (msgType.Equals("D"))
+            {
+                Console.WriteLine($"[FIX-ADMIN] 🚨🚨🚨 CRITICAL: NewOrderSingle (MsgType=D) received in FromAdmin instead of FromApp!");
+            }
         }
 
         /// <summary>
@@ -62,6 +72,10 @@ namespace OrderAccumulator.Infrastructure.FIX
             try
             {
                 string msgType = msg.Header.GetString(Tags.MsgType);
+                string seqNum = msg.Header.GetString(Tags.MsgSeqNum);
+                Console.WriteLine($"[FIX-APP] 🔍🔍🔍 FromApp CALLED!");
+                Console.WriteLine($"  MsgType={msgType} | SeqNum={seqNum}");
+                Console.WriteLine($"  Full: {msg}");
                 
                 if (msgType.Equals("D"))  // NewOrderSingle
                 {
@@ -94,12 +108,12 @@ namespace OrderAccumulator.Infrastructure.FIX
                 }
                 else
                 {
-                    Console.WriteLine($"[FIX] ⚠️ Unhandled MsgType: {msgType}");
+                    Console.WriteLine($"[FIX] ⚠️ Unhandled MsgType in FromApp: {msgType}");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[FIX-ERROR] Exception in FromApp: {ex.Message}");
+                Console.WriteLine($"[FIX-ERROR] Exception in FromApp: {ex.Message}\n{ex.StackTrace}");
             }
         }
 
@@ -108,7 +122,8 @@ namespace OrderAccumulator.Infrastructure.FIX
         /// </summary>
         public void ToApp(QuickFix.Message msg, SessionID sessionID)
         {
-            Console.WriteLine($"[FIX] 📤 Sending: MsgType={msg.Header.GetString(Tags.MsgType)}");
+            string msgType = msg.Header.GetString(Tags.MsgType);
+            Console.WriteLine($"[FIX-TOAPP] 📤 Outbound app message: MsgType={msgType}");
         }
 
         /// <summary>
@@ -116,7 +131,8 @@ namespace OrderAccumulator.Infrastructure.FIX
         /// </summary>
         public void ToAdmin(QuickFix.Message msg, SessionID sessionID)
         {
-            Console.WriteLine($"[FIX-ADMIN] Sending: MsgType={msg.Header.GetString(Tags.MsgType)}");
+            string msgType = msg.Header.GetString(Tags.MsgType);
+            Console.WriteLine($"[FIX-TOADMIN] 📤 Outbound admin message: MsgType={msgType}");
         }
 
         private string GenerateExecID()

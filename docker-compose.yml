@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   accumulator:
     build:
@@ -12,8 +10,7 @@ services:
       - ./OrderAccumulator/log:/app/log
     networks:
       - fix-network
-    environment:
-      - DOTNET_URLS=http://+:9999
+    restart: unless-stopped
 
   backend:
     build:
@@ -28,6 +25,10 @@ services:
     environment:
       - ASPNETCORE_URLS=http://+:5000
       - ASPNETCORE_ENVIRONMENT=Development
+    volumes:
+      - ./OrderGenerator.Backend/store:/app/store
+      - ./OrderGenerator.Backend/log:/app/log
+    restart: unless-stopped
 
   frontend:
     build:
@@ -35,10 +36,14 @@ services:
       dockerfile: OrderGenerator.Frontend/Dockerfile
     ports:
       - "5173:5173"
+    depends_on:
+      - backend
     networks:
       - fix-network
     environment:
-      - VITE_API_URL=http://backend:5000
+      # The browser makes requests from the user's machine, so use localhost:5000
+      - VITE_API_URL=http://localhost:5000
+    restart: unless-stopped
 
 networks:
   fix-network:

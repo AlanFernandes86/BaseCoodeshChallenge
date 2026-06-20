@@ -17,4 +17,15 @@
     <ProjectReference Include="..\OrderGenerator.Infrastructure\OrderGenerator.Infrastructure.csproj" />
   </ItemGroup>
 
+  <!-- Copy FIX configuration files to output directory during build -->
+  <ItemGroup>
+    <Content Include="../../fix.cfg" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../FIX44.xml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Create store and log directories -->
+  <Target Name="CreateDirectories" BeforeTargets="Build">
+    <MakeDir Directories="$(OutDir)store;$(OutDir)log" />
+  </Target>
+
 </Project>
