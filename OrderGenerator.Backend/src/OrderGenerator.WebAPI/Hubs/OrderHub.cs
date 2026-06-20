@@ -80,10 +80,22 @@ namespace OrderGenerator.WebAPI.Hubs
                     orderSide,
                     quantity,
                     price,
+                    connectionId: Context.ConnectionId,
                     timeoutMs: 15000
                 );
 
-                if (result.IsAccepted)
+                if (result.OrdStatus == "PENDING")
+                {
+                    await Clients.Caller.SendAsync("OrderResult", new
+                    {
+                        success = true, // Technically it's enqueued successfully
+                        status = "PENDING",
+                        clOrdId = result.ClOrdID,
+                        message = result.Message,
+                        timestamp = result.ReceivedAt
+                    });
+                }
+                else if (result.IsAccepted)
                 {
                     await Clients.Caller.SendAsync("OrderResult", new
                     {

@@ -43,7 +43,7 @@ namespace OrderAccumulator
                 var application = new FIXAcceptorApplication(exposureState);
                 Console.WriteLine("✅ FIXAcceptorApplication initialized\n");
 
-                // Create message store factory
+                // Create message store factory (persistent for session sequence numbers)
                 var storeFactory = new FileStoreFactory(settings);
                 
                 // Create and start the FIX acceptor on port 9999 (no explicit logger)

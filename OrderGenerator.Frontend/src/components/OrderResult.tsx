@@ -1,7 +1,7 @@
 
 export interface OrderResult {
   success: boolean
-  status: 'ACCEPTED' | 'REJECTED' | 'ERROR'
+  status: 'ACCEPTED' | 'REJECTED' | 'ERROR' | 'PENDING'
   orderId?: string
   clOrdId?: string
   message?: string
@@ -17,7 +17,13 @@ export function OrderResultPanel({ result }: OrderResultProps) {
   return (
     <div className={`result-box ${result.status.toLowerCase()}`} id="order-result">
       <div className="result-icon">
-        {result.status === 'ACCEPTED' ? '✅' : result.status === 'REJECTED' ? '❌' : '⚠️'}
+        {result.status === 'ACCEPTED'
+          ? '✅'
+          : result.status === 'REJECTED'
+            ? '❌'
+            : result.status === 'PENDING'
+              ? '⏳'
+              : '⚠️'}
       </div>
       <div className="result-content">
         <div className="result-status">
@@ -25,7 +31,9 @@ export function OrderResultPanel({ result }: OrderResultProps) {
             ? 'Ordem Aceita'
             : result.status === 'REJECTED'
               ? 'Ordem Rejeitada'
-              : 'Erro'}
+              : result.status === 'PENDING'
+                ? 'Ordem Pendente (Fila Outbox)'
+                : 'Erro'}
         </div>
         {result.orderId && (
           <div className="result-detail">

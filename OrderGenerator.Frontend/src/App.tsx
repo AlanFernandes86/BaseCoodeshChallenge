@@ -39,9 +39,37 @@ export default function App() {
       if (mounted) setConnected(true)
     })
 
+    // Listen for order status updates pushed from the backend (outbox worker)
+    const unsubscribeResult = signalRService.onOrderResult((res) => {
+      if (!mounted) return
+      console.log('[App] Received real-time update via SignalR:', res)
+      if (res.clOrdId) {
+        setHistory(prev => prev.map(item => {
+          if (item.clOrdId === res.clOrdId) {
+            return {
+              ...item,
+              status: res.status,
+              orderId: res.orderId,
+              message: res.message,
+              success: res.success
+            }
+          }
+          return item
+        }))
+        // Update the form's current result display if it is showing this same order
+        setResult(curr => {
+          if (curr?.clOrdId === res.clOrdId) {
+            return res
+          }
+          return curr
+        })
+      }
+    })
+
     return () => {
       mounted = false
       signalRService.disconnect()
+      unsubscribeResult()
     }
   }, [])
 
@@ -152,7 +180,11 @@ export default function App() {
                       </div>
                       <div className="history-right">
                         <div className={`history-badge ${h.status.toLowerCase()}`}>
-                          {h.status === 'ACCEPTED' ? '✓' : '✗'}
+                          {h.status === 'ACCEPTED'
+                            ? '✓'
+                            : h.status === 'PENDING'
+                              ? '⏳'
+                              : '✗'}
                         </div>
                         <div className="history-time">{h.at.toLocaleTimeString('pt-BR')}</div>
                       </div>
@@ -530,6 +562,11 @@ export default function App() {
           background: rgba(245, 158, 11, 0.1);
           border: 1px solid rgba(245, 158, 11, 0.3);
         }
+        .result-box.pending {
+          background: rgba(245, 158, 11, 0.1);
+          border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        .result-box.pending .result-status { color: #fbbf24; }
         .result-icon { font-size: 1.5rem; flex-shrink: 0; margin-top: 0.1rem; }
         .result-status {
           font-weight: 700;
@@ -592,6 +629,7 @@ export default function App() {
         .history-badge.accepted { background: rgba(34,197,94,0.2); color: #4ade80; }
         .history-badge.rejected { background: rgba(239,68,68,0.2); color: #f87171; }
         .history-badge.error { background: rgba(245,158,11,0.2); color: #fbbf24; }
+        .history-badge.pending { background: rgba(245,158,11,0.2); color: #fbbf24; }
         .history-time { font-size: 0.68rem; color: #475569; }
 
         /* Limit info */

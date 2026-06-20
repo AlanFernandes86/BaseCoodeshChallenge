@@ -4,7 +4,7 @@ const HUB_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000') + '/or
 
 export interface OrderResult {
   success: boolean
-  status: 'ACCEPTED' | 'REJECTED' | 'ERROR'
+  status: 'ACCEPTED' | 'REJECTED' | 'ERROR' | 'PENDING'
   orderId?: string
   clOrdId?: string
   message?: string
@@ -102,8 +102,12 @@ class SignalRService {
   }
 
   /** Register a callback for every OrderResult event (for real-time updates outside of submitOrder). */
-  onOrderResult(cb: OrderResultCallback): void {
+  onOrderResult(cb: OrderResultCallback): () => void {
     this.resultCallbacks.push(cb)
+    return () => {
+      const idx = this.resultCallbacks.indexOf(cb)
+      if (idx !== -1) this.resultCallbacks.splice(idx, 1)
+    }
   }
 
   /** Register a callback for when the connection is established. */

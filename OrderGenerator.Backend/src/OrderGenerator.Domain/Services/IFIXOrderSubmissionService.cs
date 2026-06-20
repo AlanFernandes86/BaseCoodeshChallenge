@@ -28,6 +28,11 @@ namespace OrderGenerator.Domain.Services
         event EventHandler<ExecutionReportData>? ExecutionReportReceived;
 
         /// <summary>
+        /// Gets whether the FIX session is currently active
+        /// </summary>
+        bool IsSessionActive { get; }
+
+        /// <summary>
         /// Send a NewOrderSingle via FIX protocol
         /// </summary>
         void SendNewOrderSingle(string symbol, Entities.OrderSide side, decimal quantity, decimal price, string clOrdID);

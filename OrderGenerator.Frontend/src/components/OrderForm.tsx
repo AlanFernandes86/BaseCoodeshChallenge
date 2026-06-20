@@ -162,7 +162,13 @@ export function OrderForm({
       {result && (
         <div className={`result-box ${result.status.toLowerCase()}`} id="order-result">
           <div className="result-icon">
-            {result.status === 'ACCEPTED' ? '✅' : result.status === 'REJECTED' ? '❌' : '⚠️'}
+            {result.status === 'ACCEPTED'
+              ? '✅'
+              : result.status === 'REJECTED'
+                ? '❌'
+                : result.status === 'PENDING'
+                  ? '⏳'
+                  : '⚠️'}
           </div>
           <div className="result-content">
             <div className="result-status">
@@ -170,7 +176,9 @@ export function OrderForm({
                 ? 'Ordem Aceita'
                 : result.status === 'REJECTED'
                   ? 'Ordem Rejeitada'
-                  : 'Erro'}
+                  : result.status === 'PENDING'
+                    ? 'Ordem Pendente (Fila Outbox)'
+                    : 'Erro'}
             </div>
             {result.orderId && (
               <div className="result-detail">Order ID: <code>{result.orderId}</code></div>

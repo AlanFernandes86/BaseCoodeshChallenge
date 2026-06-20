@@ -24,6 +24,17 @@ namespace OrderGenerator.Infrastructure.FIX
 
         public event EventHandler<ExecutionReportData>? ExecutionReportReceived;
 
+        public bool IsSessionActive
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _sessionID != null;
+                }
+            }
+        }
+
         public FIXInitiatorService()
         {
         }

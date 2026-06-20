@@ -2,6 +2,7 @@ using OrderGenerator.Infrastructure.FIX;
 using OrderGenerator.Application.UseCases;
 using OrderGenerator.Domain.Services;
 using OrderGenerator.WebAPI.Hubs;
+using OrderGenerator.WebAPI.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,6 +11,7 @@ var fixInitiator = new FIXInitiatorService();
 builder.Services.AddSingleton<IFIXOrderSubmissionService>(fixInitiator);
 builder.Services.AddSingleton(fixInitiator);
 builder.Services.AddSingleton(new OrderSubmissionService(fixInitiator as IFIXOrderSubmissionService ?? throw new InvalidOperationException()));
+builder.Services.AddHostedService<FIXOutboxWorker>();
 
 // Add services to the container
 builder.Services.AddSignalR();
