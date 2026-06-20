@@ -1,56 +1,131 @@
 using System;
 using QuickFix;
+using QuickFix.Fields;
 using OrderAccumulator.Core;
 
-namespace OrderAccumulator.Infrastructure.FIX;
-
-/// <summary>
-/// Placeholder FIX Acceptor application.
-/// Implements IApplication interface but defers message processing logic.
-/// Will implement full processing once QuickFIXn.Core 1.14.1 API is researched.
-/// </summary>
-public class FIXAcceptorApplication : IApplication
+namespace OrderAccumulator.Infrastructure.FIX
 {
-    private readonly ExposureState _exposureState;
-
-    public FIXAcceptorApplication(ExposureState exposureState)
+    /// <summary>
+    /// FIX Acceptor Application - Handles incoming FIX messages (NewOrderSingle)
+    /// and sends ExecutionReport responses.
+    /// </summary>
+    public class FIXAcceptorApplication : IApplication
     {
-        _exposureState = exposureState ?? throw new ArgumentNullException(nameof(exposureState));
-    }
+        private readonly ExposureState _exposureState;
+        private readonly FIXMessageConverter _converter;
+        private static int _execIDCounter = 0;
 
-    public void OnCreate(SessionID sessionID)
-    {
-        Console.WriteLine($"[FIX] Session created: {sessionID}");
-    }
+        public FIXAcceptorApplication(ExposureState exposureState)
+        {
+            _exposureState = exposureState ?? throw new ArgumentNullException(nameof(exposureState));
+            _converter = new FIXMessageConverter();
+        }
 
-    public void OnLogon(SessionID sessionID)
-    {
-        Console.WriteLine($"[FIX] Logon: {sessionID} - Connection established");
-    }
+        /// <summary>
+        /// IApplication.OnCreate - Called when a new session is created.
+        /// </summary>
+        public void OnCreate(SessionID sessionID)
+        {
+            Console.WriteLine($"[FIX] Session created: {sessionID}");
+        }
 
-    public void OnLogout(SessionID sessionID)
-    {
-        Console.WriteLine($"[FIX] Logout: {sessionID} - Connection closed");
-    }
+        /// <summary>
+        /// IApplication.OnLogon - Called when logon is completed.
+        /// </summary>
+        public void OnLogon(SessionID sessionID)
+        {
+            Console.WriteLine($"[FIX] ✅ Logon completed: {sessionID}");
+        }
 
-    public void FromAdmin(Message msg, SessionID sessionID)
-    {
-        Console.WriteLine($"[FIX] Admin message from {sessionID}");
-    }
+        /// <summary>
+        /// IApplication.OnLogout - Called when logout is completed.
+        /// </summary>
+        public void OnLogout(SessionID sessionID)
+        {
+            Console.WriteLine($"[FIX] ❌ Logout completed: {sessionID}");
+        }
 
-    public void FromApp(Message msg, SessionID sessionID)
-    {
-        Console.WriteLine($"[FIX] App message from {sessionID} - processing deferred");
-        // Full implementation deferred until API research complete
-    }
+        /// <summary>
+        /// IApplication.FromAdmin - Called when admin message received (logon, logout, heartbeat, etc).
+        /// </summary>
+        public void FromAdmin(QuickFix.Message msg, SessionID sessionID)
+        {
+            Console.WriteLine($"[FIX-ADMIN] Received: MsgType={msg.Header.GetString(Tags.MsgType)}");
+        }
 
-    public void ToApp(Message msg, SessionID sessionID)
-    {
-        Console.WriteLine($"[FIX] Sending message to {sessionID}");
-    }
+        /// <summary>
+        /// IApplication.FromApp - Called when application message received.
+        /// Routes NewOrderSingle messages to handler.
+        /// </summary>
+        public void FromApp(QuickFix.Message msg, SessionID sessionID)
+        {
+            try
+            {
+                string msgType = msg.Header.GetString(Tags.MsgType);
+                
+                if (msgType.Equals("D"))  // NewOrderSingle
+                {
+                    Console.WriteLine($"[FIX] 📨 NewOrderSingle received");
 
-    public void ToAdmin(Message msg, SessionID sessionID)
-    {
-        // Admin message being sent
+                    // Parse incoming order using generic message API
+                    var orderInfo = _converter.ParseNewOrderSingle(msg);
+                    Console.WriteLine($"[FIX] Parsed: {orderInfo.Symbol} {orderInfo.Side} x{orderInfo.Quantity} @ {orderInfo.Price} (ClOrdID={orderInfo.ClOrdID})");
+
+                    // Process against ExposureState
+                    var result = _exposureState.TryProcessOrder(orderInfo);
+
+                    // Generate execution report ID
+                    string execID = GenerateExecID();
+
+                    // Build ExecutionReport response using generic message API
+                    var execReport = _converter.BuildExecutionReport(msg, result, execID);
+
+                    // Send response
+                    Session.SendToTarget(execReport, sessionID);
+
+                    if (result.Accepted)
+                    {
+                        Console.WriteLine($"[FIX] ✅ Order ACCEPTED - OrderID={result.OrderID}, Exposure={result.ResultingExposure:C}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[FIX] ❌ Order REJECTED - {result.RejectReason}");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"[FIX] ⚠️ Unhandled MsgType: {msgType}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[FIX-ERROR] Exception in FromApp: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// IApplication.ToApp - Called when application message is being sent.
+        /// </summary>
+        public void ToApp(QuickFix.Message msg, SessionID sessionID)
+        {
+            Console.WriteLine($"[FIX] 📤 Sending: MsgType={msg.Header.GetString(Tags.MsgType)}");
+        }
+
+        /// <summary>
+        /// IApplication.ToAdmin - Called when admin message is being sent.
+        /// </summary>
+        public void ToAdmin(QuickFix.Message msg, SessionID sessionID)
+        {
+            Console.WriteLine($"[FIX-ADMIN] Sending: MsgType={msg.Header.GetString(Tags.MsgType)}");
+        }
+
+        private string GenerateExecID()
+        {
+            lock (typeof(FIXAcceptorApplication))
+            {
+                _execIDCounter++;
+                return $"EXEC-{DateTime.UtcNow:yyyyMMdd}-{_execIDCounter:D6}";
+            }
+        }
     }
 }

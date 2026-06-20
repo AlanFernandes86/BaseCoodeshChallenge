@@ -19,6 +19,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=publish /app/publish .
 COPY OrderGenerator.Backend/fix.cfg ./fix.cfg
+COPY OrderGenerator.Backend/FIX44.xml ./FIX44.xml
 
 ENV ASPNETCORE_URLS=http://+:5000
 EXPOSE 5000

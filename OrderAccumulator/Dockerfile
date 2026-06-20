@@ -19,6 +19,7 @@ FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
 WORKDIR /app
 COPY --from=publish /app/publish .
 COPY OrderAccumulator/fix.cfg ./fix.cfg
+COPY OrderAccumulator/FIX44.xml ./FIX44.xml
 
 EXPOSE 9999
 ENTRYPOINT ["dotnet", "OrderAccumulator.dll"]
