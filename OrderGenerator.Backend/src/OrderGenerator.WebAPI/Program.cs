@@ -1,6 +1,7 @@
 using OrderGenerator.Infrastructure.FIX;
 using OrderGenerator.Application.UseCases;
 using OrderGenerator.Domain.Services;
+using OrderGenerator.WebAPI.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -54,5 +55,6 @@ if (app.Environment.IsDevelopment())
 app.UseCors();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<OrderHub>("/orderhub");
 
 app.Run();

@@ -1,26 +1,15 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
+import { signalRService } from './services/signalRService'
+import type { OrderResult } from './services/signalRService'
+import { OrderForm, SYMBOL_META } from './components/OrderForm'
+import type { Symbol, Side } from './components/OrderForm'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-
-type Symbol = 'PETR4' | 'VALE3' | 'VIIA4'
-type Side = 'Buy' | 'Sell'
-
-interface OrderResult {
-  success: boolean
-  status: 'ACCEPTED' | 'REJECTED' | 'ERROR'
-  orderId?: string
-  clOrdId?: string
-  message?: string
-  error?: string
-  timestamp?: string
-}
-
-const SYMBOLS: Symbol[] = ['PETR4', 'VALE3', 'VIIA4']
-
-const SYMBOL_META: Record<Symbol, { color: string; emoji: string; name: string }> = {
-  PETR4: { color: '#f97316', emoji: '🛢️', name: 'Petrobras' },
-  VALE3: { color: '#22c55e', emoji: '⛏️', name: 'Vale' },
-  VIIA4: { color: '#8b5cf6', emoji: '🛍️', name: 'Via Varejo' },
+type HistoryEntry = OrderResult & {
+  symbol: Symbol
+  side: Side
+  qty: string
+  px: string
+  at: Date
 }
 
 export default function App() {
@@ -29,8 +18,32 @@ export default function App() {
   const [quantity, setQuantity] = useState('')
   const [price, setPrice] = useState('')
   const [loading, setLoading] = useState(false)
+  const [connected, setConnected] = useState(false)
   const [result, setResult] = useState<OrderResult | null>(null)
-  const [history, setHistory] = useState<(OrderResult & { symbol: Symbol; side: Side; qty: string; px: string; at: Date })[]>([])
+  const [history, setHistory] = useState<HistoryEntry[]>([])
+
+  // Connect to SignalR on mount, disconnect on unmount
+  useEffect(() => {
+    let mounted = true
+
+    signalRService
+      .connect()
+      .then(() => {
+        if (mounted) setConnected(true)
+      })
+      .catch(err => {
+        console.error('[App] SignalR connect failed:', err)
+      })
+
+    signalRService.onConnected(() => {
+      if (mounted) setConnected(true)
+    })
+
+    return () => {
+      mounted = false
+      signalRService.disconnect()
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -40,58 +53,31 @@ export default function App() {
     const qty = parseInt(quantity, 10)
     const px = parseFloat(price)
 
-    // Client-side validation
+    // Client-side validation (mirrors server-side rules)
     if (!qty || qty <= 0 || qty >= 100_000) {
       setResult({ success: false, status: 'ERROR', error: 'Quantidade deve ser um inteiro positivo menor que 100.000' })
       setLoading(false)
       return
     }
-    if (!px || px <= 0 || px >= 1000 || (Math.round(px * 100) / 100) !== px) {
+    if (!px || px <= 0 || px >= 1000 || Math.round(px * 100) / 100 !== px) {
       setResult({ success: false, status: 'ERROR', error: 'Preço deve ser um decimal positivo, múltiplo de 0,01 e menor que 1.000' })
       setLoading(false)
       return
     }
 
     try {
-      const resp = await fetch(`${API_URL}/api/orders/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol, side, quantity: qty, price: px }),
-      })
-
-      const data = await resp.json()
-
-      if (resp.ok) {
-        const r: OrderResult = {
-          success: true,
-          status: 'ACCEPTED',
-          orderId: data.orderId,
-          clOrdId: data.clOrdId,
-          message: data.message,
-          timestamp: data.timestamp,
-        }
-        setResult(r)
-        setHistory(prev => [{ ...r, symbol, side, qty: quantity, px: price, at: new Date() }, ...prev.slice(0, 9)])
-      } else {
-        const r: OrderResult = {
-          success: false,
-          status: data.status === 'REJECTED' ? 'REJECTED' : 'ERROR',
-          clOrdId: data.clOrdId,
-          message: data.message,
-          error: data.error,
-          timestamp: data.timestamp,
-        }
-        setResult(r)
-        setHistory(prev => [{ ...r, symbol, side, qty: quantity, px: price, at: new Date() }, ...prev.slice(0, 9)])
-      }
+      const r = await signalRService.submitOrder(symbol, side, qty, px)
+      setResult(r)
+      setHistory(prev => [{ ...r, symbol, side, qty: quantity, px: price, at: new Date() }, ...prev.slice(0, 9)])
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erro de conexão com o servidor'
-      setResult({ success: false, status: 'ERROR', error: message })
+      const r: OrderResult = { success: false, status: 'ERROR', error: message }
+      setResult(r)
+      setHistory(prev => [{ ...r, symbol, side, qty: quantity, px: price, at: new Date() }, ...prev.slice(0, 9)])
     } finally {
       setLoading(false)
     }
   }
-
 
   return (
     <div className="app">
@@ -103,9 +89,14 @@ export default function App() {
       <div className="container">
         {/* Header */}
         <header className="header">
-          <div className="header-badge">FIX 4.4 Protocol</div>
+          <div className="header-badge">FIX 4.4 Protocol · SignalR</div>
           <h1>Order Generator</h1>
           <p className="subtitle">Envio de ordens em tempo real via protocolo FIX</p>
+          {/* Connection status indicator */}
+          <div className={`conn-status ${connected ? 'online' : 'offline'}`} id="connection-status">
+            <span className="conn-dot" />
+            {connected ? 'Conectado ao servidor' : 'Aguardando conexão…'}
+          </div>
         </header>
 
         <div className="layout">
@@ -116,131 +107,20 @@ export default function App() {
               <h2>Nova Ordem</h2>
             </div>
 
-            <form onSubmit={handleSubmit} id="order-form">
-              {/* Symbol */}
-              <div className="field-group">
-                <label htmlFor="symbol">Símbolo</label>
-                <div className="symbol-grid">
-                  {SYMBOLS.map(s => {
-                    const m = SYMBOL_META[s]
-                    return (
-                      <button
-                        key={s}
-                        id={`symbol-${s}`}
-                        type="button"
-                        className={`symbol-btn ${symbol === s ? 'selected' : ''}`}
-                        style={{ '--symbol-color': m.color } as React.CSSProperties}
-                        onClick={() => setSymbol(s)}
-                      >
-                        <span className="symbol-emoji">{m.emoji}</span>
-                        <span className="symbol-ticker">{s}</span>
-                        <span className="symbol-name">{m.name}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Side */}
-              <div className="field-group">
-                <label htmlFor="side">Lado</label>
-                <div className="side-toggle">
-                  <button
-                    id="side-buy"
-                    type="button"
-                    className={`side-btn buy ${side === 'Buy' ? 'selected' : ''}`}
-                    onClick={() => setSide('Buy')}
-                  >
-                    <span>▲</span> Compra
-                  </button>
-                  <button
-                    id="side-sell"
-                    type="button"
-                    className={`side-btn sell ${side === 'Sell' ? 'selected' : ''}`}
-                    onClick={() => setSide('Sell')}
-                  >
-                    <span>▼</span> Venda
-                  </button>
-                </div>
-              </div>
-
-              {/* Quantity */}
-              <div className="field-group">
-                <label htmlFor="quantity">Quantidade</label>
-                <div className="input-wrapper">
-                  <input
-                    id="quantity"
-                    type="number"
-                    min="1"
-                    max="99999"
-                    step="1"
-                    placeholder="Ex: 1000"
-                    value={quantity}
-                    onChange={e => setQuantity(e.target.value)}
-                    required
-                  />
-                  <span className="input-hint">1 – 99.999 unidades</span>
-                </div>
-              </div>
-
-              {/* Price */}
-              <div className="field-group">
-                <label htmlFor="price">Preço (R$)</label>
-                <div className="input-wrapper">
-                  <input
-                    id="price"
-                    type="number"
-                    min="0.01"
-                    max="999.99"
-                    step="0.01"
-                    placeholder="Ex: 35.50"
-                    value={price}
-                    onChange={e => setPrice(e.target.value)}
-                    required
-                  />
-                  <span className="input-hint">0,01 – 999,99 · múltiplo de 0,01</span>
-                </div>
-              </div>
-
-              {/* Total preview */}
-              {quantity && price && (
-                <div className="total-preview">
-                  <span>Exposição estimada:</span>
-                  <strong style={{ color: side === 'Buy' ? '#4ade80' : '#f87171' }}>
-                    {side === 'Buy' ? '+' : '-'}
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                      parseFloat(quantity) * parseFloat(price)
-                    )}
-                  </strong>
-                </div>
-              )}
-
-              <button id="submit-order" type="submit" className="submit-btn" disabled={loading}>
-                {loading ? (
-                  <><span className="spinner" /> Enviando via FIX…</>
-                ) : (
-                  <>⚡ Enviar Ordem</>
-                )}
-              </button>
-            </form>
-
-            {/* Result */}
-            {result && (
-              <div className={`result-box ${result.status.toLowerCase()}`} id="order-result">
-                <div className="result-icon">
-                  {result.status === 'ACCEPTED' ? '✅' : result.status === 'REJECTED' ? '❌' : '⚠️'}
-                </div>
-                <div className="result-content">
-                  <div className="result-status">
-                    {result.status === 'ACCEPTED' ? 'Ordem Aceita' : result.status === 'REJECTED' ? 'Ordem Rejeitada' : 'Erro'}
-                  </div>
-                  {result.orderId && <div className="result-detail">Order ID: <code>{result.orderId}</code></div>}
-                  {result.clOrdId && <div className="result-detail">Client Order ID: <code>{result.clOrdId}</code></div>}
-                  {result.message && <div className="result-message">{result.message}</div>}
-                  {result.error && <div className="result-message">{result.error}</div>}
-                </div>
-              </div>
-            )}
+            <OrderForm
+              symbol={symbol}
+              side={side}
+              quantity={quantity}
+              price={price}
+              loading={loading}
+              connected={connected}
+              onSymbolChange={setSymbol}
+              onSideChange={setSide}
+              onQuantityChange={setQuantity}
+              onPriceChange={setPrice}
+              onSubmit={handleSubmit}
+              result={result}
+            />
           </div>
 
           {/* History Card */}
@@ -367,6 +247,42 @@ export default function App() {
         .subtitle {
           color: #64748b;
           font-size: 1rem;
+          margin-bottom: 1rem;
+        }
+
+        /* Connection status */
+        .conn-status {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          font-size: 0.75rem;
+          font-weight: 500;
+          padding: 0.3rem 0.9rem;
+          border-radius: 999px;
+          margin-top: 0.5rem;
+          transition: all 0.3s ease;
+        }
+        .conn-status.online {
+          background: rgba(34, 197, 94, 0.1);
+          border: 1px solid rgba(34, 197, 94, 0.3);
+          color: #4ade80;
+        }
+        .conn-status.offline {
+          background: rgba(245, 158, 11, 0.1);
+          border: 1px solid rgba(245, 158, 11, 0.3);
+          color: #fbbf24;
+        }
+        .conn-dot {
+          width: 7px; height: 7px;
+          border-radius: 50%;
+          background: currentColor;
+        }
+        .conn-status.online .conn-dot {
+          animation: pulse-dot 2s ease-in-out infinite;
+        }
+        @keyframes pulse-dot {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
         }
 
         /* Layout */

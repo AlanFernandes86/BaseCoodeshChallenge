@@ -85,22 +85,36 @@ namespace OrderGenerator.WebAPI.Controllers
             }
         }
 
+        // Valid symbols as defined in the business requirements
+        private static readonly string[] ValidSymbols = ["PETR4", "VALE3", "VIIA4"];
+
         /// <summary>
-        /// Validate order submission request
+        /// Validate order submission request against all business rules.
+        /// Mirrors the frontend validation so the API is independently safe.
         /// </summary>
-        private string? ValidateRequest(SubmitOrderRequest request)
+        private static string? ValidateRequest(SubmitOrderRequest request)
         {
-            if (string.IsNullOrWhiteSpace(request.Symbol))
-                return "Symbol is required";
+            // Symbol must be one of the allowed tickers
+            if (string.IsNullOrWhiteSpace(request.Symbol) ||
+                !Array.Exists(ValidSymbols, s => s.Equals(request.Symbol, StringComparison.OrdinalIgnoreCase)))
+                return $"Símbolo inválido: '{request.Symbol}'. Use PETR4, VALE3 ou VIIA4.";
 
-            if (string.IsNullOrWhiteSpace(request.Side))
-                return "Side is required";
+            // Side must be Buy or Sell (case-insensitive)
+            if (string.IsNullOrWhiteSpace(request.Side) ||
+                (!request.Side.Equals("Buy", StringComparison.OrdinalIgnoreCase) &&
+                 !request.Side.Equals("Sell", StringComparison.OrdinalIgnoreCase)))
+                return $"Lado inválido: '{request.Side}'. Use 'Buy' ou 'Sell'.";
 
-            if (request.Quantity <= 0)
-                return "Quantity must be greater than 0";
+            // Quantity: positive integer, strictly less than 100.000
+            if (request.Quantity <= 0 || request.Quantity >= 100_000 || request.Quantity != Math.Floor(request.Quantity))
+                return "Quantidade deve ser um inteiro positivo menor que 100.000.";
 
-            if (request.Price <= 0)
-                return "Price must be greater than 0";
+            // Price: positive decimal, less than 1.000, multiple of 0.01
+            if (request.Price <= 0 || request.Price >= 1000)
+                return "Preço deve ser um valor positivo menor que 1.000.";
+
+            if (Math.Round(request.Price, 2) != request.Price)
+                return "Preço deve ser múltiplo de 0,01.";
 
             return null;
         }
