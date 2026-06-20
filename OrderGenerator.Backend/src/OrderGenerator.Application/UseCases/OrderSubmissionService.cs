@@ -15,10 +15,29 @@ namespace OrderGenerator.Application.UseCases
         private readonly IFIXOrderSubmissionService _fixService;
         private readonly object _idLock = new object();
         private long _orderCounter = 0;
+        private readonly ConcurrentDictionary<string, TaskCompletionSource<OrderSubmissionResult>> _pendingOrders = new();
 
         public OrderSubmissionService(IFIXOrderSubmissionService fixService)
         {
             _fixService = fixService ?? throw new ArgumentNullException(nameof(fixService));
+            _fixService.ExecutionReportReceived += OnExecutionReportReceived;
+        }
+
+        private void OnExecutionReportReceived(object? sender, ExecutionReportData report)
+        {
+            if (_pendingOrders.TryRemove(report.ClOrdID, out var tcs))
+            {
+                tcs.TrySetResult(new OrderSubmissionResult
+                {
+                    ClOrdID = report.ClOrdID,
+                    OrderID = report.OrderID,
+                    IsAccepted = report.IsAccepted,
+                    ExecType = report.ExecType,
+                    OrdStatus = report.OrdStatus,
+                    Message = report.Text,
+                    ReceivedAt = report.ReceivedAt
+                });
+            }
         }
 
         /// <summary>
@@ -34,64 +53,43 @@ namespace OrderGenerator.Application.UseCases
         {
             // Generate unique order ID
             string clOrdID = GenerateClientOrderID();
+            var tcs = new TaskCompletionSource<OrderSubmissionResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            if (!_pendingOrders.TryAdd(clOrdID, tcs))
+            {
+                return OrderSubmissionResult.CreateRejected(clOrdID, "Duplicate client order ID");
+            }
 
             try
             {
                 // Send NewOrderSingle via FIX
                 _fixService.SendNewOrderSingle(symbol, side, quantity, price, clOrdID);
 
-                // Wait for ExecutionReport response
-                var result = await WaitForExecutionReportAsync(clOrdID, timeoutMs);
+                // Wait for the TaskCompletionSource to complete or timeout
+                var delayTask = Task.Delay(timeoutMs);
+                var completedTask = await Task.WhenAny(tcs.Task, delayTask);
 
-                return result;
+                if (completedTask == tcs.Task)
+                {
+                    return await tcs.Task;
+                }
+                else
+                {
+                    _pendingOrders.TryRemove(clOrdID, out _);
+                    return OrderSubmissionResult.CreateRejected(
+                        clOrdID,
+                        $"No response from Accumulator (timeout after {timeoutMs}ms)"
+                    );
+                }
             }
             catch (Exception ex)
             {
+                _pendingOrders.TryRemove(clOrdID, out _);
                 return OrderSubmissionResult.CreateRejected(
                     clOrdID,
                     $"FIX submission error: {ex.Message}"
                 );
             }
-        }
-
-        /// <summary>
-        /// Wait for ExecutionReport response for a given ClOrdID
-        /// </summary>
-        private async Task<OrderSubmissionResult> WaitForExecutionReportAsync(
-            string clOrdID,
-            int timeoutMs)
-        {
-            var startTime = DateTime.UtcNow;
-            var timeout = TimeSpan.FromMilliseconds(timeoutMs);
-
-            while (DateTime.UtcNow - startTime < timeout)
-            {
-                if (_fixService.TryGetExecutionReport(out var report))
-                {
-                    if (report?.ClOrdID == clOrdID)
-                    {
-                        return new OrderSubmissionResult
-                        {
-                            ClOrdID = clOrdID,
-                            OrderID = report.OrderID,
-                            IsAccepted = report.IsAccepted,
-                            ExecType = report.ExecType,
-                            OrdStatus = report.OrdStatus,
-                            Message = report.Text,
-                            ReceivedAt = report.ReceivedAt
-                        };
-                    }
-                    // Put back reports for other orders (shouldn't happen in this simplified version)
-                }
-
-                // Sleep briefly to avoid busy-waiting
-                await Task.Delay(50);
-            }
-
-            return OrderSubmissionResult.CreateRejected(
-                clOrdID,
-                $"No response from Accumulator (timeout after {timeoutMs}ms)"
-            );
         }
 
         /// <summary>

@@ -23,6 +23,11 @@ namespace OrderGenerator.Domain.Services
     public interface IFIXOrderSubmissionService
     {
         /// <summary>
+        /// Event fired when an ExecutionReport is received from FIX
+        /// </summary>
+        event EventHandler<ExecutionReportData>? ExecutionReportReceived;
+
+        /// <summary>
         /// Send a NewOrderSingle via FIX protocol
         /// </summary>
         void SendNewOrderSingle(string symbol, Entities.OrderSide side, decimal quantity, decimal price, string clOrdID);
