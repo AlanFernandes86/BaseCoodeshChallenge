@@ -1,5 +1,8 @@
 using System;
+using System.IO;
 using System.Threading;
+using OrderAccumulator.Core;
+using QuickFix;
 
 namespace OrderAccumulator
 {
@@ -7,14 +10,32 @@ namespace OrderAccumulator
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("OrderAccumulator - FIX Acceptor");
-            Console.WriteLine("Placeholder: Will be implemented in PHASE 2");
-            Console.WriteLine("Service started. Listening on port 9999...");
-            
-            // Keep the application running
-            while (true)
+            try
             {
-                Thread.Sleep(1000);
+                Console.WriteLine("╔════════════════════════════════════════╗");
+                Console.WriteLine("║   OrderAccumulator - FIX Acceptor      ║");
+                Console.WriteLine("╚════════════════════════════════════════╝\n");
+
+                // Initialize domain state (pure, thread-safe exposure tracking)
+                var exposureState = new ExposureState();
+                Console.WriteLine("✅ ExposureState initialized\n");
+
+                // Print welcome message
+                exposureState.PrintState();
+                Console.WriteLine("📡 Service ready (FIX bootstrap in PHASE 3)\n");
+                Console.WriteLine("Press Ctrl+C to exit gracefully.\n");
+
+                // Keep the application running
+                while (true)
+                {
+                    Thread.Sleep(1000);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ FATAL ERROR: {ex.Message}");
+                Console.WriteLine($"📋 StackTrace: {ex.StackTrace}");
+                Environment.Exit(1);
             }
         }
     }
