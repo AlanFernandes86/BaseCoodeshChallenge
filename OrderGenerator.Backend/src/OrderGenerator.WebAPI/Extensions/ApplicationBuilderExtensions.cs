@@ -1,4 +1,4 @@
-using OrderGenerator.Domain.Services;
+using OrderGenerator.Infrastructure.FIX;
 using OrderGenerator.WebAPI.Hubs;
 
 namespace OrderGenerator.WebAPI.Extensions
@@ -7,7 +7,7 @@ namespace OrderGenerator.WebAPI.Extensions
     {
         public static IApplicationBuilder UseFIXInitiator(this IApplicationBuilder app)
         {
-            var fixInitiator = app.ApplicationServices.GetRequiredService<IFIXOrderSubmissionService>();
+            var fixInitiator = app.ApplicationServices.GetRequiredService<IFIXSessionManager>();
 
             try
             {

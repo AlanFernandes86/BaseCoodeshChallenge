@@ -1,9 +1,7 @@
 using OrderGenerator.Application.Services;
+using OrderGenerator.Application.UseCases;
 using OrderGenerator.Domain.Services;
 using OrderGenerator.Infrastructure.FIX;
-using OrderGenerator.WebAPI.Services;
-using Microsoft.Extensions.DependencyInjection;
-using System;
 
 namespace OrderGenerator.WebAPI.Extensions
 {
@@ -11,9 +9,14 @@ namespace OrderGenerator.WebAPI.Extensions
     {
         public static IServiceCollection AddFIXServices(this IServiceCollection services)
         {
-            services.AddSingleton<IFIXOrderSubmissionService, FIXInitiatorService>();
-            services.AddSingleton<OrderSubmissionService>();
-            services.AddHostedService<FIXOutboxWorker>();
+            services.AddSingleton<FIXInitiatorService>();
+            services.AddSingleton<IOrderSubmissionService>(sp => sp.GetRequiredService<FIXInitiatorService>());
+            services.AddSingleton<IFIXSessionManager>(sp => sp.GetRequiredService<FIXInitiatorService>());
+            
+            services.AddSingleton<IOrderTracker, OrderTracker>();
+            services.AddSingleton<SubmitOrderUseCase>();
+            services.AddHostedService<HandleExecutionReportService>();            
+            services.AddHostedService<OrderOutboxService>();
 
             return services;
         }

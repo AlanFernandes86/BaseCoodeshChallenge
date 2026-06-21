@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using OrderGenerator.Domain.Entities;
-using OrderGenerator.Application.Services;
+using OrderGenerator.Application.UseCases;
 
 namespace OrderGenerator.WebAPI.Controllers
 {
@@ -9,11 +9,13 @@ namespace OrderGenerator.WebAPI.Controllers
     [Route("api/[controller]")]
     public class OrdersController : ControllerBase
     {
-        private readonly OrderSubmissionService _submissionService;
+        private readonly SubmitOrderUseCase _submissionService;
+        private readonly ILogger<OrdersController> _logger;
 
-        public OrdersController(OrderSubmissionService submissionService)
+        public OrdersController(SubmitOrderUseCase submissionService, ILogger<OrdersController> logger)
         {
             _submissionService = submissionService ?? throw new ArgumentNullException(nameof(submissionService));
+            _logger = logger;
         }
 
         /// <summary>

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
-using System.Threading.Tasks;
-using OrderGenerator.Application.Services;
 using OrderGenerator.Domain.Entities;
+using OrderGenerator.Application.UseCases;
+using OrderGenerator.Application.Services;
 
 namespace OrderGenerator.WebAPI.Hubs
 {
@@ -13,11 +13,18 @@ namespace OrderGenerator.WebAPI.Hubs
     {
         private static readonly string[] ValidSymbols = ["PETR4", "VALE3", "VIIA4"];
 
-        private readonly OrderSubmissionService _submissionService;
+        private readonly SubmitOrderUseCase _submissionService;
+        private readonly IOrderTracker _orderTracker;
+        private readonly ILogger<OrderHub> _logger;
 
-        public OrderHub(OrderSubmissionService submissionService)
+        public OrderHub(
+            SubmitOrderUseCase submissionService,
+            IOrderTracker orderTracker,
+            ILogger<OrderHub> logger)
         {
             _submissionService = submissionService ?? throw new ArgumentNullException(nameof(submissionService));
+            _orderTracker = orderTracker ?? throw new ArgumentNullException(nameof(orderTracker));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         /// <summary>
@@ -29,8 +36,8 @@ namespace OrderGenerator.WebAPI.Hubs
             await Clients.Caller.SendAsync("Connected", Context.ConnectionId);
             await base.OnConnectedAsync();
         }
+            
 
-        /// <summary>
         /// Called when a client disconnects from the hub.
         /// </summary>
         public override async Task OnDisconnectedAsync(Exception? exception)
@@ -80,44 +87,17 @@ namespace OrderGenerator.WebAPI.Hubs
                     orderSide,
                     quantity,
                     price,
-                    connectionId: Context.ConnectionId,
-                    timeoutMs: 15000
+                    connectionId: Context.ConnectionId
                 );
-
-                if (result.OrdStatus == "PENDING")
+                
+                await Clients.Caller.SendAsync("OrderResult", new
                 {
-                    await Clients.Caller.SendAsync("OrderResult", new
-                    {
-                        success = true, // Technically it's enqueued successfully
-                        status = "PENDING",
-                        clOrdId = result.ClOrdID,
-                        message = result.Message,
-                        timestamp = result.ReceivedAt
-                    });
-                }
-                else if (result.IsAccepted)
-                {
-                    await Clients.Caller.SendAsync("OrderResult", new
-                    {
-                        success = true,
-                        status = "ACCEPTED",
-                        orderId = result.OrderID,
-                        clOrdId = result.ClOrdID,
-                        message = result.Message,
-                        timestamp = result.ReceivedAt
-                    });
-                }
-                else
-                {
-                    await Clients.Caller.SendAsync("OrderResult", new
-                    {
-                        success = false,
-                        status = "REJECTED",
-                        clOrdId = result.ClOrdID,
-                        message = result.Message,
-                        timestamp = result.ReceivedAt
-                    });
-                }
+                    success = true,
+                    status = result.OrdStatus,
+                    clOrdId = result.ClOrdID,
+                    message = result.Message,
+                    timestamp = result.ReceivedAt
+                });
             }
             catch (Exception ex)
             {

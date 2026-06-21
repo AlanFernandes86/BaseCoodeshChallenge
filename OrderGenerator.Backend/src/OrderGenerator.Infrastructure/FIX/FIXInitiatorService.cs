@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using QuickFix;
 using QuickFix.Store;
 using QuickFix.Transport;
@@ -14,19 +13,16 @@ namespace OrderGenerator.Infrastructure.FIX
     /// Manages FIX Initiator connection to the OrderAccumulator
     /// Sends NewOrderSingle messages and receives ExecutionReports
     /// </summary>
-    public class FIXInitiatorService : IApplication, IFIXOrderSubmissionService
+    public class FIXInitiatorService : IApplication, IOrderSubmissionService, IFIXSessionManager
     {
         private SessionID? _sessionID;
         private SocketInitiator? _initiator;
         private readonly object _lock = new object();
         private readonly ILogger<FIXInitiatorService> _logger;
         
-        // Queue for responses from Accumulator
-        private readonly ConcurrentQueue<ExecutionReportData> _executionReports = new();
-
         public event EventHandler<ExecutionReportData>? ExecutionReportReceived;
 
-        public bool IsSessionActive
+        public bool IsReady
         {
             get
             {
@@ -98,21 +94,13 @@ namespace OrderGenerator.Infrastructure.FIX
             try
             {
                 _logger.LogInformation($"[FIX-INITIATOR] 📝 Building NewOrderSingle:");
-                _logger.LogInformation($"[FIX-INITIATOR]   Symbol={symbol}, Side={side}, Qty={quantity}, Price={price}");
-                _logger.LogInformation($"[FIX-INITIATOR]   ClOrdID={clOrdID}");
-                _logger.LogInformation($"[FIX-INITIATOR]   SessionID={_sessionID}");
 
-                // Create NewOrderSingle using Message API (MsgType='D')
-                var order = new Message();
-                
-                // Set MsgType in header FIRST
+                var order = new Message();                
+
                 order.Header.SetField(new StringField(35, "D"));  // MsgType = NewOrderSingle
-                
-                // Verify MsgType was set
-                string verifyMsgType = order.Header.GetString(Tags.MsgType);
-                _logger.LogInformation($"[FIX-INITIATOR] 📋 After header set - MsgType={verifyMsgType}");
-                
-                // Set required fields
+
+                string verifyMsgType = order.Header.GetString(Tags.MsgType);                
+
                 order.SetField(new StringField(11, clOrdID));      // ClOrdID
                 order.SetField(new StringField(55, symbol));       // Symbol
                 order.SetField(new StringField(54, ((int)side).ToString()));  // Side: 1=Buy, 2=Sell
@@ -120,14 +108,6 @@ namespace OrderGenerator.Infrastructure.FIX
                 order.SetField(new DecimalField(44, price));       // Price
                 order.SetField(new StringField(40, "2"));          // OrdType = 2 (Limit)
                 order.SetField(new StringField(60, DateTime.UtcNow.ToString("yyyyMMdd-HH:mm:ss")));  // TransactTime (field 60)
-
-                // Verify complete message before sending
-                _logger.LogInformation($"[FIX-INITIATOR] ✅ Message ready:");
-                _logger.LogInformation($"  MsgType={order.Header.GetString(Tags.MsgType)}");
-                _logger.LogInformation($"  ClOrdID={order.GetString(11)}");
-                _logger.LogInformation($"  Symbol={order.GetString(55)}");
-                _logger.LogInformation($"  Side={order.GetString(54)}");
-                _logger.LogInformation($"  Full Message:\n{order}");
 
                 // Send to Accumulator
                 bool sendResult = Session.SendToTarget(order, _sessionID);
@@ -144,15 +124,6 @@ namespace OrderGenerator.Infrastructure.FIX
             }
         }
 
-        /// <summary>
-        /// Try to get an execution report (non-blocking) (IFIXOrderSubmissionService implementation)
-        /// </summary>
-        public bool TryGetExecutionReport(out ExecutionReportData? report)
-        {
-            return _executionReports.TryDequeue(out report);
-        }
-
-        // ========== IApplication Implementation ==========
 
         public void OnCreate(SessionID sessionID)
         {
@@ -190,7 +161,7 @@ namespace OrderGenerator.Infrastructure.FIX
                 string msgType = msg.Header.GetString(Tags.MsgType);
                 _logger.LogInformation($"[FIX-INITIATOR] 📨 FromApp called with MsgType={msgType}");
                 
-                if (msgType.Equals("8"))  // ExecutionReport
+                if (msgType.Equals("8"))
                 {
                     string clOrdID = msg.GetString(11);
                     string ordID = msg.GetString(37);
@@ -204,12 +175,11 @@ namespace OrderGenerator.Infrastructure.FIX
                         OrderID = ordID,
                         ExecType = execType,
                         OrdStatus = ordStatus,
-                        IsAccepted = ordStatus == "2" || ordStatus == "0",  // FILLED or NEW
+                        IsAccepted = ordStatus == "0",
                         Text = text,
                         ReceivedAt = DateTime.UtcNow
                     };
 
-                    _executionReports.Enqueue(report);
                     ExecutionReportReceived?.Invoke(this, report);
                     
                     _logger.LogInformation($"[FIX-INITIATOR] ✅ ExecutionReport received: {clOrdID} Status={ordStatus} IsAccepted={report.IsAccepted}");
