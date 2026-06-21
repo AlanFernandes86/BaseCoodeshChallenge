@@ -1,3 +1,4 @@
+using OrderGenerator.Domain.Entities;
 using OrderGenerator.WebAPI.Models;
 
 namespace OrderGenerator.WebAPI.Validators
@@ -13,9 +14,9 @@ namespace OrderGenerator.WebAPI.Validators
                 return $"Símbolo inválido: '{symbol}'. Use PETR4, VALE3 ou VIIA4.";
 
             if (string.IsNullOrWhiteSpace(side) ||
-                (!side.Equals("Buy", StringComparison.OrdinalIgnoreCase) &&
-                 !side.Equals("Sell", StringComparison.OrdinalIgnoreCase)))
-                return $"Lado inválido: '{side}'. Use 'Buy' ou 'Sell'.";
+                (!side.Equals(nameof(OrderSide.Buy), StringComparison.OrdinalIgnoreCase) &&
+                 !side.Equals(nameof(OrderSide.Sell), StringComparison.OrdinalIgnoreCase)))
+                return $"Lado inválido: '{side}'. Use '{nameof(OrderSide.Buy)}' ou '{nameof(OrderSide.Sell)}'.";
 
             if (quantity <= 0 || quantity >= 100_000 || quantity != Math.Floor(quantity))
                 return "Quantidade deve ser um inteiro positivo menor que 100.000.";

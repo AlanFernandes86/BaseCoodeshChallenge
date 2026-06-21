@@ -10,8 +10,8 @@ COPY ["OrderGenerator.Backend/FIX44.xml", "./FIX44.xml"]
 
 RUN find ./src -type d -name obj -exec rm -rf {} + 2>/dev/null || true
 RUN find ./src -type d -name bin -exec rm -rf {} + 2>/dev/null || true
-RUN dotnet restore "OrderGenerator.Backend.sln"
-RUN dotnet build "OrderGenerator.Backend.sln" -c Release -o /app/build
+RUN dotnet restore "src/OrderGenerator.WebAPI/OrderGenerator.WebAPI.csproj"
+RUN dotnet build "src/OrderGenerator.WebAPI/OrderGenerator.WebAPI.csproj" -c Release -o /app/build
 
 # Publish stage
 FROM build AS publish

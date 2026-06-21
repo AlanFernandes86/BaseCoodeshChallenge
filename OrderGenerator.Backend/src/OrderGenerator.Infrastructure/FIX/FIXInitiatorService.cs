@@ -1,10 +1,11 @@
-using System;
+using Microsoft.Extensions.Logging;
+using OrderGenerator.Domain.Entities;
+using OrderGenerator.Domain.Services;
 using QuickFix;
+using QuickFix.Fields;
 using QuickFix.Store;
 using QuickFix.Transport;
-using QuickFix.Fields;
-using OrderGenerator.Domain.Services;
-using Microsoft.Extensions.Logging;
+using System;
 
 namespace OrderGenerator.Infrastructure.FIX
 {
@@ -102,7 +103,9 @@ namespace OrderGenerator.Infrastructure.FIX
 
                 order.SetField(new StringField(11, clOrdID));      // ClOrdID
                 order.SetField(new StringField(55, symbol));       // Symbol
-                order.SetField(new StringField(54, side));         // Side: 1=Buy, 2=Sell
+                
+                string fixSide = side.Equals(nameof(OrderSide.Buy), StringComparison.OrdinalIgnoreCase) ? OrderSide.Buy : OrderSide.Sell;
+                order.SetField(new StringField(54, fixSide));         // Side: 1=Buy, 2=Sell
                 order.SetField(new DecimalField(38, quantity));    // OrderQty
                 order.SetField(new DecimalField(44, price));       // Price
                 order.SetField(new StringField(40, "2"));          // OrdType = 2 (Limit)
