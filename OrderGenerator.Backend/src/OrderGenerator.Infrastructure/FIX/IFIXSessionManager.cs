@@ -6,5 +6,6 @@ namespace OrderGenerator.Infrastructure.FIX
     public interface IFIXSessionManager
     {
         void Start(string configFilePath);
+        void Stop();
     }
 }

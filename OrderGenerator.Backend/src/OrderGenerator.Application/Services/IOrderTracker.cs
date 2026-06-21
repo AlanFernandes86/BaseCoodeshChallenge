@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Concurrent;
-using System.Threading.Tasks;
-using OrderGenerator.Domain.Entities;
 
 namespace OrderGenerator.Application.Services
 {
@@ -11,7 +9,7 @@ namespace OrderGenerator.Application.Services
     public class OutboxOrder
     {
         public string Symbol { get; set; } = "";
-        public OrderSide Side { get; set; }
+        public string Side { get; set; } = "";
         public decimal Quantity { get; set; }
         public decimal Price { get; set; }
         public string ClOrdID { get; set; } = "";

@@ -7,7 +7,7 @@ namespace OrderGenerator.WebAPI.Extensions
 {
     public static class ServiceCollectionExtensions
     {
-        public static IServiceCollection AddFIXServices(this IServiceCollection services)
+        public static IServiceCollection AddServices(this IServiceCollection services)
         {
             services.AddSingleton<FIXInitiatorService>();
             services.AddSingleton<IOrderSubmissionService>(sp => sp.GetRequiredService<FIXInitiatorService>());

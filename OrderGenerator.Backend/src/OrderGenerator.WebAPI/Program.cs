@@ -3,7 +3,7 @@ using OrderGenerator.WebAPI.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddFIXServices();
+builder.Services.AddServices();
 builder.Services.AddWebApiServices();
 
 var app = builder.Build();

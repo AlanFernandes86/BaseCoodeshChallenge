@@ -25,11 +25,11 @@ namespace OrderGenerator.Application.UseCases
 
         public async Task<OrderSubmissionResult> SubmitOrderAsync(
             string symbol,
-            OrderSide side,
+            string side,
             decimal quantity,
             decimal price,
             string connectionId = "",
-            int timeoutMs = 15000)
+            int timeoutMs = 1500)
         {
             string clOrdID = _orderTracker.GenerateClientOrderID();
 
@@ -69,7 +69,7 @@ namespace OrderGenerator.Application.UseCases
                     ClOrdID = clOrdID,
                     IsAccepted = false,
                     OrdStatus = "PENDING",
-                    Message = "Ordem enviada.",
+                    Message = "Ordem enviada para o servidor de exposição.",
                     ReceivedAt = DateTime.UtcNow,
                     ConnectionId = connectionId
                 };
@@ -81,19 +81,6 @@ namespace OrderGenerator.Application.UseCases
                     $"FIX submission error: {ex.Message}"
                 );
             }
-        }
-
-        public void SendOutboxOrder(OutboxOrder outboxOrder)
-        {
-            _logger.LogInformation($"[SUBMIT-OUTBOX] Despachando ordem enfileirada {outboxOrder.ClOrdID} via FIX...");
-            
-            _submissionService.SendNewOrderSingle(
-                outboxOrder.Symbol,
-                outboxOrder.Side,
-                outboxOrder.Quantity,
-                outboxOrder.Price,
-                outboxOrder.ClOrdID
-            );
         }
     }
 }

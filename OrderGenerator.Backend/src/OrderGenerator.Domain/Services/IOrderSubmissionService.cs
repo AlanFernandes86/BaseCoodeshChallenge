@@ -35,6 +35,6 @@ namespace OrderGenerator.Domain.Services
         /// <summary>
         /// Send a NewOrderSingle via FIX protocol
         /// </summary>
-        void SendNewOrderSingle(string symbol, Entities.OrderSide side, decimal quantity, decimal price, string clOrdID);
+        void SendNewOrderSingle(string symbol, string side, decimal quantity, decimal price, string clOrdID);
     }
 }

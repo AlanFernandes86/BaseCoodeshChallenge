@@ -84,7 +84,7 @@ namespace OrderGenerator.Infrastructure.FIX
         /// <summary>
         /// Send NewOrderSingle to Accumulator (IFIXOrderSubmissionService implementation)
         /// </summary>
-        public void SendNewOrderSingle(string symbol, OrderSide side, decimal quantity, decimal price, string clOrdID)
+        public void SendNewOrderSingle(string symbol, string side, decimal quantity, decimal price, string clOrdID)
         {
             if (_sessionID == null)
             {
@@ -103,7 +103,7 @@ namespace OrderGenerator.Infrastructure.FIX
 
                 order.SetField(new StringField(11, clOrdID));      // ClOrdID
                 order.SetField(new StringField(55, symbol));       // Symbol
-                order.SetField(new StringField(54, ((int)side).ToString()));  // Side: 1=Buy, 2=Sell
+                order.SetField(new StringField(54, side));         // Side: 1=Buy, 2=Sell
                 order.SetField(new DecimalField(38, quantity));    // OrderQty
                 order.SetField(new DecimalField(44, price));       // Price
                 order.SetField(new StringField(40, "2"));          // OrdType = 2 (Limit)
