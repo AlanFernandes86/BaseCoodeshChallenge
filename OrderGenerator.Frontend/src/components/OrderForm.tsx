@@ -45,29 +45,64 @@ export function OrderForm({
   const px = parseFloat(price)
   const hasPreview = !isNaN(qty) && !isNaN(px) && qty > 0 && px > 0
 
+  const [isOpen, setIsOpen] = React.useState(false)
+  const dropdownRef = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   return (
     <form onSubmit={onSubmit} id="order-form">
       {/* Symbol */}
       <div className="field-group">
-        <label htmlFor="symbol">Símbolo</label>
-        <div className="symbol-grid">
-          {SYMBOLS.map(s => {
-            const m = SYMBOL_META[s]
-            return (
-              <button
-                key={s}
-                id={`symbol-${s}`}
-                type="button"
-                className={`symbol-btn ${symbol === s ? 'selected' : ''}`}
-                style={{ '--symbol-color': m.color } as React.CSSProperties}
-                onClick={() => onSymbolChange(s)}
-              >
-                <span className="symbol-emoji">{m.emoji}</span>
-                <span className="symbol-ticker">{s}</span>
-                <span className="symbol-name">{m.name}</span>
-              </button>
-            )
-          })}
+        <label htmlFor="symbol-select-toggle">Ativo</label>
+        <div className="custom-select-wrapper" ref={dropdownRef}>
+          <button
+            id="symbol-select-toggle"
+            type="button"
+            className={`custom-select-toggle ${isOpen ? 'open' : ''}`}
+            onClick={() => setIsOpen(!isOpen)}
+          >
+            <div className="selected-option">
+              <div className="symbol-dot" style={{ background: SYMBOL_META[symbol].color }} />
+              <span className="symbol-ticker">{symbol}</span>
+              <span className="symbol-name-sep">·</span>
+              <span className="ticker-name">{SYMBOL_META[symbol].name}</span>
+            </div>
+            <span className="chevron-arrow">{isOpen ? '▲' : '▼'}</span>
+          </button>
+
+          {isOpen && (
+            <div className="custom-select-dropdown">
+              {SYMBOLS.map(s => {
+                const m = SYMBOL_META[s]
+                return (
+                  <button
+                    key={s}
+                    id={`symbol-${s}`}
+                    type="button"
+                    className={`custom-select-option ${symbol === s ? 'selected' : ''}`}
+                    onClick={() => {
+                      onSymbolChange(s)
+                      setIsOpen(false)
+                    }}
+                  >
+                    <div className="symbol-dot" style={{ background: m.color }} />
+                    <span className="symbol-ticker">{s}</span>
+                    <span className="symbol-name-sep">·</span>
+                    <span className="ticker-name">{m.name}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -136,7 +171,7 @@ export function OrderForm({
       {hasPreview && (
         <div className="total-preview">
           <span>Exposição estimada:</span>
-          <strong style={{ color: side === 'Buy' ? '#4ade80' : '#f87171' }}>
+          <strong style={{ color: side === 'Buy' ? 'var(--green)' : 'var(--red)' }}>
             {side === 'Buy' ? '+' : '-'}
             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(qty * px)}
           </strong>
@@ -154,7 +189,7 @@ export function OrderForm({
         ) : !connected ? (
           <><span className="spinner" /> Conectando ao servidor…</>
         ) : (
-          <>⚡ Enviar Ordem</>
+          <>Enviar Ordem</>
         )}
       </button>
 
@@ -163,12 +198,12 @@ export function OrderForm({
         <div className={`result-box ${result.status.toLowerCase()}`} id="order-result">
           <div className="result-icon">
             {result.status === 'ACCEPTED'
-              ? '✅'
+              ? '✓'
               : result.status === 'REJECTED'
-                ? '❌'
+                ? '×'
                 : result.status === 'PENDING'
-                  ? '⏳'
-                  : '⚠️'}
+                  ? '··'
+                  : '!'}
           </div>
           <div className="result-content">
             <div className="result-status">
