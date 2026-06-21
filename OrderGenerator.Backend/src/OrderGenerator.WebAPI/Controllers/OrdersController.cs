@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using OrderGenerator.Domain.Entities;
-using OrderGenerator.Application.UseCases;
+using OrderGenerator.Application.Services;
 
 namespace OrderGenerator.WebAPI.Controllers
 {

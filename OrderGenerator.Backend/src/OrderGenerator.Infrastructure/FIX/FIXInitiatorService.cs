@@ -6,6 +6,7 @@ using QuickFix.Transport;
 using QuickFix.Fields;
 using OrderGenerator.Domain.Entities;
 using OrderGenerator.Domain.Services;
+using Microsoft.Extensions.Logging;
 
 namespace OrderGenerator.Infrastructure.FIX
 {
@@ -18,6 +19,7 @@ namespace OrderGenerator.Infrastructure.FIX
         private SessionID? _sessionID;
         private SocketInitiator? _initiator;
         private readonly object _lock = new object();
+        private readonly ILogger<FIXInitiatorService> _logger;
         
         // Queue for responses from Accumulator
         private readonly ConcurrentQueue<ExecutionReportData> _executionReports = new();
@@ -35,8 +37,9 @@ namespace OrderGenerator.Infrastructure.FIX
             }
         }
 
-        public FIXInitiatorService()
+        public FIXInitiatorService(ILogger<FIXInitiatorService> logger)
         {
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         /// <summary>
@@ -57,11 +60,11 @@ namespace OrderGenerator.Infrastructure.FIX
                         (QuickFix.Logger.ILogFactory)null
                     );
                     _initiator.Start();
-                    Console.WriteLine("[FIX-INITIATOR] Started successfully");
+                    _logger.LogInformation("[FIX-INITIATOR] Started successfully");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[FIX-INITIATOR-ERROR] Failed to start: {ex.Message}");
+                    _logger.LogError($"[FIX-INITIATOR-ERROR] Failed to start: {ex.Message}");
                     throw;
                 }
             }
@@ -77,7 +80,7 @@ namespace OrderGenerator.Infrastructure.FIX
                 if (_initiator != null)
                 {
                     _initiator.Stop();
-                    Console.WriteLine("[FIX-INITIATOR] Stopped");
+                    _logger.LogInformation("[FIX-INITIATOR] Stopped");
                 }
             }
         }
@@ -94,10 +97,10 @@ namespace OrderGenerator.Infrastructure.FIX
 
             try
             {
-                Console.WriteLine($"[FIX-INITIATOR] 📝 Building NewOrderSingle:");
-                Console.WriteLine($"[FIX-INITIATOR]   Symbol={symbol}, Side={side}, Qty={quantity}, Price={price}");
-                Console.WriteLine($"[FIX-INITIATOR]   ClOrdID={clOrdID}");
-                Console.WriteLine($"[FIX-INITIATOR]   SessionID={_sessionID}");
+                _logger.LogInformation($"[FIX-INITIATOR] 📝 Building NewOrderSingle:");
+                _logger.LogInformation($"[FIX-INITIATOR]   Symbol={symbol}, Side={side}, Qty={quantity}, Price={price}");
+                _logger.LogInformation($"[FIX-INITIATOR]   ClOrdID={clOrdID}");
+                _logger.LogInformation($"[FIX-INITIATOR]   SessionID={_sessionID}");
 
                 // Create NewOrderSingle using Message API (MsgType='D')
                 var order = new Message();
@@ -107,7 +110,7 @@ namespace OrderGenerator.Infrastructure.FIX
                 
                 // Verify MsgType was set
                 string verifyMsgType = order.Header.GetString(Tags.MsgType);
-                Console.WriteLine($"[FIX-INITIATOR] 📋 After header set - MsgType={verifyMsgType}");
+                _logger.LogInformation($"[FIX-INITIATOR] 📋 After header set - MsgType={verifyMsgType}");
                 
                 // Set required fields
                 order.SetField(new StringField(11, clOrdID));      // ClOrdID
@@ -119,24 +122,24 @@ namespace OrderGenerator.Infrastructure.FIX
                 order.SetField(new StringField(60, DateTime.UtcNow.ToString("yyyyMMdd-HH:mm:ss")));  // TransactTime (field 60)
 
                 // Verify complete message before sending
-                Console.WriteLine($"[FIX-INITIATOR] ✅ Message ready:");
-                Console.WriteLine($"  MsgType={order.Header.GetString(Tags.MsgType)}");
-                Console.WriteLine($"  ClOrdID={order.GetString(11)}");
-                Console.WriteLine($"  Symbol={order.GetString(55)}");
-                Console.WriteLine($"  Side={order.GetString(54)}");
-                Console.WriteLine($"  Full Message:\n{order}");
+                _logger.LogInformation($"[FIX-INITIATOR] ✅ Message ready:");
+                _logger.LogInformation($"  MsgType={order.Header.GetString(Tags.MsgType)}");
+                _logger.LogInformation($"  ClOrdID={order.GetString(11)}");
+                _logger.LogInformation($"  Symbol={order.GetString(55)}");
+                _logger.LogInformation($"  Side={order.GetString(54)}");
+                _logger.LogInformation($"  Full Message:\n{order}");
 
                 // Send to Accumulator
                 bool sendResult = Session.SendToTarget(order, _sessionID);
-                Console.WriteLine($"[FIX-INITIATOR] ✅ SendToTarget result: {sendResult}");
+                _logger.LogInformation($"[FIX-INITIATOR] ✅ SendToTarget result: {sendResult}");
                 if (!sendResult)
                 {
-                    Console.WriteLine($"[FIX-INITIATOR] ⚠️ SendToTarget returned FALSE!");
+                    _logger.LogWarning($"[FIX-INITIATOR] ⚠️ SendToTarget returned FALSE!");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[FIX-INITIATOR-ERROR] Failed to send NewOrderSingle: {ex.Message}\n{ex.StackTrace}");
+                _logger.LogError($"[FIX-INITIATOR-ERROR] Failed to send NewOrderSingle: {ex.Message}\n{ex.StackTrace}");
                 throw;
             }
         }
@@ -153,7 +156,7 @@ namespace OrderGenerator.Infrastructure.FIX
 
         public void OnCreate(SessionID sessionID)
         {
-            Console.WriteLine($"[FIX-INITIATOR] Session created: {sessionID}");
+            _logger.LogInformation($"[FIX-INITIATOR] Session created: {sessionID}");
         }
 
         public void OnLogon(SessionID sessionID)
@@ -162,7 +165,7 @@ namespace OrderGenerator.Infrastructure.FIX
             {
                 _sessionID = sessionID;
             }
-            Console.WriteLine($"[FIX-INITIATOR] Logon: {sessionID}");
+            _logger.LogInformation($"[FIX-INITIATOR] Logon: {sessionID}");
         }
 
         public void OnLogout(SessionID sessionID)
@@ -171,13 +174,13 @@ namespace OrderGenerator.Infrastructure.FIX
             {
                 _sessionID = null;
             }
-            Console.WriteLine($"[FIX-INITIATOR] Logout: {sessionID}");
+            _logger.LogInformation($"[FIX-INITIATOR] Logout: {sessionID}");
         }
 
         public void FromAdmin(Message msg, SessionID sessionID)
         {
             string msgType = msg.Header.GetString(Tags.MsgType);
-            Console.WriteLine($"[FIX-INITIATOR-ADMIN] MsgType={msgType}");
+            _logger.LogInformation($"[FIX-INITIATOR-ADMIN] MsgType={msgType}");
         }
 
         public void FromApp(Message msg, SessionID sessionID)
@@ -185,7 +188,7 @@ namespace OrderGenerator.Infrastructure.FIX
             try
             {
                 string msgType = msg.Header.GetString(Tags.MsgType);
-                Console.WriteLine($"[FIX-INITIATOR] 📨 FromApp called with MsgType={msgType}");
+                _logger.LogInformation($"[FIX-INITIATOR] 📨 FromApp called with MsgType={msgType}");
                 
                 if (msgType.Equals("8"))  // ExecutionReport
                 {
@@ -209,12 +212,12 @@ namespace OrderGenerator.Infrastructure.FIX
                     _executionReports.Enqueue(report);
                     ExecutionReportReceived?.Invoke(this, report);
                     
-                    Console.WriteLine($"[FIX-INITIATOR] ✅ ExecutionReport received: {clOrdID} Status={ordStatus} IsAccepted={report.IsAccepted}");
+                    _logger.LogInformation($"[FIX-INITIATOR] ✅ ExecutionReport received: {clOrdID} Status={ordStatus} IsAccepted={report.IsAccepted}");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[FIX-INITIATOR-ERROR] {ex.Message}");
+                _logger.LogError($"[FIX-INITIATOR-ERROR] {ex.Message}");
             }
         }
 
@@ -222,16 +225,15 @@ namespace OrderGenerator.Infrastructure.FIX
         {
             string msgType = msg.Header.GetString(Tags.MsgType);
             string seqNum = msg.Header.GetString(Tags.MsgSeqNum);
-            Console.WriteLine($"[FIX-INITIATOR-TOAPP] 📤 Outbound app message:");
-            Console.WriteLine($"  MsgType={msgType} | SeqNum={seqNum}");
-            Console.WriteLine($"  Full: {msg}");
+            _logger.LogInformation($"[FIX-INITIATOR-TOAPP] 📤 Outbound app message:");
+            _logger.LogInformation($"  MsgType={msgType} | SeqNum={seqNum}");
+            _logger.LogInformation($"  Full: {msg}");
         }
 
         public void ToAdmin(Message msg, SessionID sessionID)
         {
             string msgType = msg.Header.GetString(Tags.MsgType);
-            Console.WriteLine($"[FIX-INITIATOR-TOADMIN] 📤 Outbound admin message: MsgType={msgType}");
+            _logger.LogInformation($"[FIX-INITIATOR-TOADMIN] 📤 Outbound admin message: MsgType={msgType}");
         }
     }
 }
-

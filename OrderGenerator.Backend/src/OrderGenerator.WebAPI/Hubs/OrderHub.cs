@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 using System.Threading.Tasks;
-using OrderGenerator.Application.UseCases;
+using OrderGenerator.Application.Services;
 using OrderGenerator.Domain.Entities;
 
 namespace OrderGenerator.WebAPI.Hubs

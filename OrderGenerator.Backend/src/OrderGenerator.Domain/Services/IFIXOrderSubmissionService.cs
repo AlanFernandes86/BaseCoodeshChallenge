@@ -41,5 +41,11 @@ namespace OrderGenerator.Domain.Services
         /// Try to get an execution report response (non-blocking)
         /// </summary>
         bool TryGetExecutionReport(out ExecutionReportData? report);
+
+        /// <summary>
+        /// Starts the FIX initiator with the given configuration file path. This method should establish the FIX session and be ready to send/receive messages.
+        /// </summary>
+        /// <param name="configFilePath"></param>
+        void Start(string configFilePath);
     }
 }

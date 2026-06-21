@@ -1,9 +1,4 @@
-using System;
-using System.IO;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using OrderGenerator.Infrastructure.FIX;
+using OrderGenerator.Domain.Services;
 using OrderGenerator.WebAPI.Hubs;
 
 namespace OrderGenerator.WebAPI.Extensions
@@ -12,7 +7,7 @@ namespace OrderGenerator.WebAPI.Extensions
     {
         public static IApplicationBuilder UseFIXInitiator(this IApplicationBuilder app)
         {
-            var fixInitiator = app.ApplicationServices.GetRequiredService<FIXInitiatorService>();
+            var fixInitiator = app.ApplicationServices.GetRequiredService<IFIXOrderSubmissionService>();
 
             try
             {

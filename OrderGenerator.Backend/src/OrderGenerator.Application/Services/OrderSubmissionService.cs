@@ -3,8 +3,9 @@ using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using OrderGenerator.Domain.Entities;
 using OrderGenerator.Domain.Services;
+using Microsoft.Extensions.Logging;
 
-namespace OrderGenerator.Application.UseCases
+namespace OrderGenerator.Application.Services
 {
     /// <summary>
     /// Represents an order queued in the outbox when the FIX session is offline
@@ -26,6 +27,7 @@ namespace OrderGenerator.Application.UseCases
     public class OrderSubmissionService
     {
         private readonly IFIXOrderSubmissionService _fixService;
+        private readonly ILogger<OrderSubmissionService> _logger;
         private readonly object _idLock = new object();
         private long _orderCounter = 0;
 
@@ -42,9 +44,10 @@ namespace OrderGenerator.Application.UseCases
 
         public ConcurrentQueue<OutboxOrder> OutboxQueue => _outboxQueue;
 
-        public OrderSubmissionService(IFIXOrderSubmissionService fixService)
+        public OrderSubmissionService(IFIXOrderSubmissionService fixService, ILogger<OrderSubmissionService> logger)
         {
             _fixService = fixService ?? throw new ArgumentNullException(nameof(fixService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _fixService.ExecutionReportReceived += OnExecutionReportReceived;
         }
 
@@ -101,7 +104,7 @@ namespace OrderGenerator.Application.UseCases
 
                 _outboxQueue.Enqueue(outboxOrder);
 
-                Console.WriteLine($"[SUBMIT-OUTBOX] Session offline. Queued order {clOrdID} for {symbol}");
+                _logger.LogInformation($"[SUBMIT-OUTBOX] Session offline. Queued order {clOrdID} for {symbol}");
 
                 return new OrderSubmissionResult
                 {
@@ -164,7 +167,7 @@ namespace OrderGenerator.Application.UseCases
             // Register so when the ExecutionReport is received, we complete the TCS and fire the processed event
             _pendingOrders.TryAdd(outboxOrder.ClOrdID, (tcs, outboxOrder.ConnectionId));
             
-            Console.WriteLine($"[SUBMIT-OUTBOX] Despachando ordem enfileirada {outboxOrder.ClOrdID} via FIX...");
+            _logger.LogInformation($"[SUBMIT-OUTBOX] Despachando ordem enfileirada {outboxOrder.ClOrdID} via FIX...");
             
             _fixService.SendNewOrderSingle(
                 outboxOrder.Symbol,

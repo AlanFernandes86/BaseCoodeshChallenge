@@ -1,12 +1,7 @@
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using OrderGenerator.Application.UseCases;
-using OrderGenerator.Infrastructure.FIX;
+using OrderGenerator.Application.Services;
 using Microsoft.AspNetCore.SignalR;
 using OrderGenerator.WebAPI.Hubs;
+using OrderGenerator.Domain.Services;
 
 namespace OrderGenerator.WebAPI.Services
 {
@@ -17,13 +12,13 @@ namespace OrderGenerator.WebAPI.Services
     public class FIXOutboxWorker : BackgroundService
     {
         private readonly OrderSubmissionService _submissionService;
-        private readonly FIXInitiatorService _fixInitiator;
+        private readonly IFIXOrderSubmissionService _fixInitiator;
         private readonly IHubContext<OrderHub> _hubContext;
         private readonly ILogger<FIXOutboxWorker> _logger;
 
         public FIXOutboxWorker(
             OrderSubmissionService submissionService,
-            FIXInitiatorService fixInitiator,
+            IFIXOrderSubmissionService fixInitiator,
             IHubContext<OrderHub> hubContext,
             ILogger<FIXOutboxWorker> logger)
         {

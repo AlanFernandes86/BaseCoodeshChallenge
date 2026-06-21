@@ -1,4 +1,4 @@
-using OrderGenerator.Application.UseCases;
+using OrderGenerator.Application.Services;
 using OrderGenerator.Domain.Services;
 using OrderGenerator.Infrastructure.FIX;
 using OrderGenerator.WebAPI.Services;
@@ -11,10 +11,8 @@ namespace OrderGenerator.WebAPI.Extensions
     {
         public static IServiceCollection AddFIXServices(this IServiceCollection services)
         {
-            var fixInitiator = new FIXInitiatorService();
-            services.AddSingleton<IFIXOrderSubmissionService>(fixInitiator);
-            services.AddSingleton(fixInitiator);
-            services.AddSingleton(new OrderSubmissionService(fixInitiator));
+            services.AddSingleton<IFIXOrderSubmissionService, FIXInitiatorService>();
+            services.AddSingleton<OrderSubmissionService>();
             services.AddHostedService<FIXOutboxWorker>();
 
             return services;
