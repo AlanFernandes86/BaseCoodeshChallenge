@@ -6,10 +6,8 @@ namespace OrderAccumulator.Core.Models
     public class ProcessingResult
     {
         public bool Accepted { get; set; }
-        public string OrderID { get; set; } = string.Empty;  // Unique order ID assigned by acceptor
-        public string? RejectReason { get; set; }  // Populated only if rejected
-
-        // Calculated exposure after this order (for logging/tracking)
+        public string OrderID { get; set; } = string.Empty;
+        public string? RejectReason { get; set; }
         public decimal ResultingExposure { get; set; }
 
         /// <summary>
@@ -29,20 +27,15 @@ namespace OrderAccumulator.Core.Models
         /// <summary>
         /// Creates a rejection result
         /// </summary>
-        public static ProcessingResult CreateRejected(string rejectReason, decimal currentExposure)
+        public static ProcessingResult CreateRejected(string orderID, string rejectReason, decimal currentExposure)
         {
             return new ProcessingResult
             {
                 Accepted = false,
-                OrderID = "NONE",  // FIX tag 37 must not be empty; "NONE" is the standard convention for rejections
+                OrderID = orderID,
                 RejectReason = rejectReason,
                 ResultingExposure = currentExposure
             };
         }
-
-        public override string ToString() =>
-            Accepted
-                ? $"ProcessingResult {{ Accepted=true, OrderID={OrderID}, Exposure={ResultingExposure} }}"
-                : $"ProcessingResult {{ Accepted=false, RejectReason={RejectReason}, Exposure={ResultingExposure} }}";
     }
 }

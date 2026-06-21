@@ -118,7 +118,17 @@ namespace OrderAccumulator.Infrastructure.FIX
 
         private int TryApplyExecutionReport(QuickFix.Message msg)
         {
-            if (!msg.IsSetField(Tags.ExecType) || msg.GetChar(Tags.ExecType) != ExecType.NEW)
+            if (!msg.IsSetField(Tags.ExecType))
+                return 0;
+
+            char execType = msg.GetChar(Tags.ExecType);            
+            if (execType == ExecType.REJECTED)
+            {
+                _exposureState.AdvanceOrderIdCounter();
+                return 1;
+            }
+
+            if (execType != ExecType.NEW)
                 return 0;
 
             if (!msg.IsSetField(Tags.Symbol) || !msg.IsSetField(Tags.Side) || 
@@ -134,7 +144,7 @@ namespace OrderAccumulator.Infrastructure.FIX
             decimal price  = msg.GetDecimal(Tags.Price);
             decimal impact = sideStr == "1" ? qty * price : -(qty * price);
 
-            _exposureState.ApplyHistoricalExposure(symbol, impact);
+            _exposureState.ApplyHistoricalExposure(symbol, impact);            
 
             string orderId = msg.IsSetField(Tags.OrderID) ? msg.GetString(Tags.OrderID) : "unknown";
             _logger.LogInformation("[STORE-REPLAY] ✅  ExecutionReport {OrderId}: {Symbol} Side={Side} Qty={Qty} Px={Price} → impact={Impact}",
