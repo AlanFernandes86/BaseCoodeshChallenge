@@ -10,8 +10,8 @@ COPY ["OrderAccumulator/FIX44.xml", "./FIX44.xml"]
 
 RUN find ./src -type d -name obj -exec rm -rf {} + 2>/dev/null || true
 RUN find ./src -type d -name bin -exec rm -rf {} + 2>/dev/null || true
-RUN dotnet restore "OrderAccumulator.sln"
-RUN dotnet build "OrderAccumulator.sln" -c Release -o /app/build
+RUN dotnet restore "src/OrderAccumulator/OrderAccumulator.csproj"
+RUN dotnet build "src/OrderAccumulator/OrderAccumulator.csproj" -c Release -o /app/build
 
 # Publish stage
 FROM build AS publish

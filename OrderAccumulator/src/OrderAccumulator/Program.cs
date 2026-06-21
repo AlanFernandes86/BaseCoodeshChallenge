@@ -42,17 +42,17 @@ namespace OrderAccumulator
                 builder.Services.AddSingleton<IApplication, FIXAcceptorApplication>();
                 Console.WriteLine("✅ FIXAcceptorApplication registered as IApplication\n");
 
+                // Register FileStore-based exposure state reconstructor
+                builder.Services.AddSingleton<FIXStoreExposureReconstructor>();
+                Console.WriteLine("✅ FIXStoreExposureReconstructor registered\n");
+
                 // Register the hosted background service
                 builder.Services.AddHostedService<FIXAcceptorHostedService>();
                 Console.WriteLine("✅ FIXAcceptorHostedService registered as HostedService\n");
 
-                var host = builder.Build();
-
-                // Print welcome exposure state
-                var exposureState = host.Services.GetRequiredService<ExposureState>();
-                exposureState.PrintState();
-
                 Console.WriteLine("📡 Running Host. Ready. Waiting for FIX connections...\n");
+
+                var host = builder.Build();
                 await host.RunAsync();
             }
             catch (Exception ex)

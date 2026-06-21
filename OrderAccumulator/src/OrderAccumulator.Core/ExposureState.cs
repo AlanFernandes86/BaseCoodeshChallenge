@@ -75,6 +75,23 @@ namespace OrderAccumulator.Core
         }
 
         /// <summary>
+        /// Apply a historical exposure impact from a confirmed accepted order read from the
+        /// local FIX FileStore at startup. Bypasses the limit check because these orders were
+        /// already accepted and committed to the store in a prior session — re-checking limits
+        /// would produce incorrect rejections for orders that were legitimately accepted before.
+        /// Must only be called before the Acceptor starts (no concurrent order processing).
+        /// </summary>
+        public void ApplyHistoricalExposure(string symbol, decimal impact)
+        {
+            lock (_stateLock)
+            {
+                decimal current = _exposures.TryGetValue(symbol, out var exp) ? exp : 0m;
+                _exposures[symbol] = current + impact;
+                _orderIdCounter++;
+            }
+        }
+
+        /// <summary>
         /// Get current exposure for a symbol
         /// </summary>
         public decimal GetExposure(string symbol)
