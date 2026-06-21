@@ -20,6 +20,16 @@ RUN dotnet publish "src/OrderGenerator.WebAPI/OrderGenerator.WebAPI.csproj" -c R
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
+
+# Configure PT-BR culture
+RUN apt-get update && apt-get install -y locales && rm -rf /var/lib/apt/lists/* \
+    && sed -i '/pt_BR.UTF-8/s/^# //g' /etc/locale.gen \
+    && locale-gen pt_BR.UTF-8
+
+ENV LANG=pt_BR.UTF-8
+ENV LANGUAGE=pt_BR:pt
+ENV LC_ALL=pt_BR.UTF-8
+
 COPY --from=publish /app/publish .
 
 ENV ASPNETCORE_URLS=http://+:5000
