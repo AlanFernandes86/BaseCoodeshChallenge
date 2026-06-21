@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using QuickFix;
 using QuickFix.Store;
+using QuickFix.Fields;
 using OrderAccumulator.Core;
 using Microsoft.Extensions.Logging;
 
@@ -24,16 +25,6 @@ namespace OrderAccumulator.Infrastructure.FIX
     /// </summary>
     public class FIXStoreExposureReconstructor
     {
-        // FIX field tags
-        private const int TAG_MSGTYPE = 35;
-        private const int TAG_POSSDUPFLAG = 43;
-        private const int TAG_EXECTYPE = 150;
-        private const int TAG_SYMBOL = 55;
-        private const int TAG_SIDE = 54;
-        private const int TAG_ORDERQTY = 38;   // order quantity in NewOrderSingle
-        private const int TAG_PRICE = 44;   // price in NewOrderSingle
-        private const int TAG_ORDERID = 37;
-
         private readonly ExposureState _exposureState;
         private readonly SessionSettings _settings;
         private readonly ILogger<FIXStoreExposureReconstructor> _logger;
@@ -90,7 +81,7 @@ namespace OrderAccumulator.Infrastructure.FIX
             {
                 try
                 {
-                    applied += TryApplyMessage(_exposureState, rawMsg);
+                    applied += TryApplyMessage(rawMsg);
                 }
                 catch (Exception ex)
                 {
@@ -101,82 +92,54 @@ namespace OrderAccumulator.Infrastructure.FIX
             return applied;
         }
 
-        private int TryApplyMessage(ExposureState exposureState, string rawMsg)
+        private int TryApplyMessage(string rawMsg)
         {
-            string? msgType = ExtractField(rawMsg, TAG_MSGTYPE);
-            if (msgType == null) return 0;
-
-            string? possDup = ExtractField(rawMsg, TAG_POSSDUPFLAG);
-            if (possDup == "Y") return 0;
-
-            return msgType switch
+            try
             {
-                // ExecutionReport: message SENT by this Accumulator.
-                "8" => TryApplyExecutionReport(exposureState, rawMsg),
+                var msg = new QuickFix.Message(rawMsg);
 
-                // Admin messages (Logon='A', Heartbeat='0', etc.) — ignore
-                _ => 0
-            };
+                string msgType = msg.Header.GetString(Tags.MsgType);
+                if (msgType != MsgType.EXECUTION_REPORT) return 0;
+
+                if (msg.IsSetField(Tags.PossDupFlag))
+                {
+                    string possDup = msg.GetString(Tags.PossDupFlag);
+                    if (possDup == "Y") return 0;
+                }
+
+                return TryApplyExecutionReport(msg);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[STORE-REPLAY] ⚠️ Failed to parse raw message: {Message}", ex.Message);
+                return 0;
+            }
         }
 
-        private int TryApplyExecutionReport(ExposureState exposureState, string rawMsg)
+        private int TryApplyExecutionReport(QuickFix.Message msg)
         {
-            // Only accepted/new ExecutionReports (ExecType='0') affect exposure.
-            // Rejected do not change exposure.
-            string? execType = ExtractField(rawMsg, TAG_EXECTYPE);
-            if (execType != "0") return 0;
+            if (!msg.IsSetField(Tags.ExecType) || msg.GetChar(Tags.ExecType) != ExecType.NEW)
+                return 0;
 
-            string? symbol   = ExtractField(rawMsg, TAG_SYMBOL);
-            string? sideStr  = ExtractField(rawMsg, TAG_SIDE);
-            string? orderQty = ExtractField(rawMsg, TAG_ORDERQTY);
-            string? priceStr = ExtractField(rawMsg, TAG_PRICE);
-            string? orderId  = ExtractField(rawMsg, TAG_ORDERID);
-
-            if (symbol == null || sideStr == null || orderQty == null || priceStr == null)
+            if (!msg.IsSetField(Tags.Symbol) || !msg.IsSetField(Tags.Side) || 
+                !msg.IsSetField(Tags.OrderQty) || !msg.IsSetField(Tags.Price))
             {
                 _logger.LogWarning("[STORE-REPLAY] ⚠️  ExecutionReport missing required fields — skipped.");
                 return 0;
             }
 
-            if (!IsValidSymbol(symbol))
-            {
-                _logger.LogWarning("[STORE-REPLAY] ⚠️  Unknown symbol '{Symbol}' — skipped.", symbol);
-                return 0;
-            }
+            string symbol = msg.GetString(Tags.Symbol);
+            string sideStr = msg.GetString(Tags.Side);
+            decimal qty    = msg.GetDecimal(Tags.OrderQty);
+            decimal price  = msg.GetDecimal(Tags.Price);
+            decimal impact = sideStr == "1" ? qty * price : -(qty * price);
 
-            decimal qty    = decimal.Parse(orderQty, CultureInfo.InvariantCulture);
-            decimal price  = decimal.Parse(priceStr, CultureInfo.InvariantCulture);
-            decimal impact = sideStr == "1" ? qty * price : -(qty * price);   // Buy=+, Sell=-
+            _exposureState.ApplyHistoricalExposure(symbol, impact);
 
-            exposureState.ApplyHistoricalExposure(symbol, impact);
-
+            string orderId = msg.IsSetField(Tags.OrderID) ? msg.GetString(Tags.OrderID) : "unknown";
             _logger.LogInformation("[STORE-REPLAY] ✅  ExecutionReport {OrderId}: {Symbol} Side={Side} Qty={Qty} Px={Price} → impact={Impact}",
                                   orderId, symbol, sideStr, qty, price, impact);
             return 1;
-        }        
-
-        #region Helpers
-
-        private static bool IsValidSymbol(string symbol) =>
-            Array.Exists(Core.Constants.ValidSymbols, s => s == symbol);
-
-        /// <summary>
-        /// Extracts the value of a FIX field from a raw FIX message string.
-        /// FIX fields are delimited by SOH (\u0001 / ASCII 1).
-        /// </summary>
-        private static string? ExtractField(string rawMsg, int tag)
-        {
-            // BeginString (tag 8) is always first and has no leading SOH
-            string prefix = tag == 8 ? $"{tag}=" : $"\u0001{tag}=";
-
-            int idx = rawMsg.IndexOf(prefix, StringComparison.Ordinal);
-            if (idx < 0) return null;
-
-            idx += prefix.Length;
-            int endIdx = rawMsg.IndexOf('\u0001', idx);
-            return endIdx < 0 ? rawMsg.Substring(idx) : rawMsg.Substring(idx, endIdx - idx);
         }
-
-        #endregion
     }
 }
