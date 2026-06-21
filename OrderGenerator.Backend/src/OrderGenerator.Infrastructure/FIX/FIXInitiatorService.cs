@@ -3,7 +3,6 @@ using QuickFix;
 using QuickFix.Store;
 using QuickFix.Transport;
 using QuickFix.Fields;
-using OrderGenerator.Domain.Entities;
 using OrderGenerator.Domain.Services;
 using Microsoft.Extensions.Logging;
 

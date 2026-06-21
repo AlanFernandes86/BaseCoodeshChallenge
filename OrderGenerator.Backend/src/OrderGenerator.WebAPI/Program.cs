@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Builder;
 using OrderGenerator.WebAPI.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);

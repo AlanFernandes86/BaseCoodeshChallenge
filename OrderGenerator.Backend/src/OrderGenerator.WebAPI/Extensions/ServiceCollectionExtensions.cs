@@ -14,7 +14,7 @@ namespace OrderGenerator.WebAPI.Extensions
             services.AddSingleton<IFIXSessionManager>(sp => sp.GetRequiredService<FIXInitiatorService>());
             
             services.AddSingleton<IOrderTracker, OrderTracker>();
-            services.AddSingleton<SubmitOrderUseCase>();
+            services.AddSingleton<ISubmitOrderUseCase, SubmitOrderUseCase>();
             services.AddHostedService<HandleExecutionReportService>();            
             services.AddHostedService<OrderOutboxService>();
 

@@ -9,24 +9,25 @@ namespace OrderGenerator.WebAPI.Controllers
     [Route("api/[controller]")]
     public class OrdersController : ControllerBase
     {
-        private readonly SubmitOrderUseCase _submissionService;
+        private readonly ISubmitOrderUseCase _submissionService;
         private readonly ILogger<OrdersController> _logger;
 
-        public OrdersController(SubmitOrderUseCase submissionService, ILogger<OrdersController> logger)
+        public OrdersController(ISubmitOrderUseCase submissionService, ILogger<OrdersController> logger)
         {
             _submissionService = submissionService ?? throw new ArgumentNullException(nameof(submissionService));
             _logger = logger;
         }
 
         /// <summary>
-        /// Submit an order for processing
+        /// Submit an order for processing - only sends the order to the FIX engine, does not wait for execution report
+        /// Actually execution reports will only be sent via SignalR to the client
         /// </summary>
         [HttpPost("submit")]
         public async Task<IActionResult> SubmitOrder([FromBody] SubmitOrderRequest request)
         {
             if (request == null)
             {
-                return BadRequest(new { error = "Request body is required" });
+                return BadRequest(new SubmitOrderResponse { Success = false, Status = "ERROR", Error = "Request body is required" });
             }
 
             _logger.LogInformation("Received order submission request: {Symbol} {Side} {Quantity} @ {Price}",
@@ -36,39 +37,40 @@ namespace OrderGenerator.WebAPI.Controllers
             var validationError = OrderValidator.Validate(request);
             if (validationError != null)
             {
-                return BadRequest(new { error = validationError });
+                return BadRequest(new SubmitOrderResponse { Success = false, Status = "ERROR", Error = validationError });
             }
 
             try
             {
                 // Submit order via FIX
-                var result = await _submissionService.SubmitOrderAsync(
-                    request.Symbol,
-                    request.Side,
-                    request.Quantity,
-                    request.Price,
-                    timeoutMs: 5000
-                );
-
-                return Ok(new
+                var result = await _submissionService.SubmitOrderAsync(new OrderGenerator.Application.DTOs.SubmitOrder
                 {
-                    success = true,
-                    status = result.OrdStatus,
-                    clOrdId = result.ClOrdID,
-                    message = result.Message,
-                    timestamp = result.ReceivedAt
-                });                
+                    Symbol = request.Symbol,
+                    Side = request.Side,
+                    Quantity = request.Quantity,
+                    Price = request.Price
+                });
+
+                return Ok(new SubmitOrderResponse
+                {
+                    Success = true,
+                    Status = result.OrdStatus,
+                    ClOrdId = result.ClOrdID,
+                    Message = result.Message,
+                    Timestamp = result.ReceivedAt
+                });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
+                return StatusCode(500, new SubmitOrderResponse
                 {
-                    error = $"Order submission failed: {ex.Message}",
-                    timestamp = DateTime.UtcNow
+                    Success = false,
+                    Status = "ERROR",
+                    Error = $"Order submission failed: {ex.Message}",
+                    Timestamp = DateTime.UtcNow
                 });
             }
         }
 
     }
 }
-

@@ -1,8 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using OrderGenerator.Domain.Services;
 using OrderGenerator.WebAPI.Hubs;
+using OrderGenerator.WebAPI.Models;
 
 namespace OrderGenerator.Application.Services
 {
@@ -41,14 +40,14 @@ namespace OrderGenerator.Application.Services
             {
                 _logger.LogInformation($"[HANDLE-EXEC-REPORT] Broadcasting execution report for ClOrdID {report.ClOrdID}");
                 
-                await _hubContext.Clients.All.SendAsync("OrderResult", new
+                await _hubContext.Clients.All.SendAsync("OrderResult", new SubmitOrderResponse
                 {
-                    success = report.IsAccepted,
-                    status = report.OrdStatus == "8" ? "REJECTED" : report.IsAccepted ? "ACCEPTED" : report.OrdStatus,
-                    orderId = report.OrderID,
-                    clOrdId = report.ClOrdID,
-                    message = report.Text,
-                    timestamp = report.ReceivedAt
+                    Success = report.IsAccepted,
+                    Status = report.OrdStatus == "8" ? "REJECTED" : report.IsAccepted ? "ACCEPTED" : report.OrdStatus,
+                    OrderId = report.OrderID,
+                    ClOrdId = report.ClOrdID,
+                    Message = report.Text,
+                    Timestamp = report.ReceivedAt
                 });
             }
             catch (Exception ex)

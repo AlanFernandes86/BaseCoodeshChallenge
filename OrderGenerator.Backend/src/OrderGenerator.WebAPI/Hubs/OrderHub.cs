@@ -1,8 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
-using OrderGenerator.Domain.Entities;
 using OrderGenerator.Application.UseCases;
-using OrderGenerator.Application.Services;
 using OrderGenerator.WebAPI.Validators;
+using OrderGenerator.WebAPI.Models;
 
 namespace OrderGenerator.WebAPI.Hubs
 {
@@ -12,12 +11,11 @@ namespace OrderGenerator.WebAPI.Hubs
     /// </summary>
     public class OrderHub : Hub
     {
-        private readonly SubmitOrderUseCase _submissionService;
+        private readonly ISubmitOrderUseCase _submissionService;
         private readonly ILogger<OrderHub> _logger;
 
         public OrderHub(
-            SubmitOrderUseCase submissionService,
-            IOrderTracker orderTracker,
+            ISubmitOrderUseCase submissionService,
             ILogger<OrderHub> logger)
         {
             _submissionService = submissionService ?? throw new ArgumentNullException(nameof(submissionService));
@@ -44,9 +42,8 @@ namespace OrderGenerator.WebAPI.Hubs
         }
 
         /// <summary>
-        /// Submits a new order via the FIX protocol and returns the execution result to the caller.
+        /// Submits a new order via the FIX protocol
         /// Invoked by the client: hub.invoke("SubmitOrder", symbol, side, quantity, price)
-        /// Result delivered to client via: on("OrderResult", callback)
         /// </summary>
         public async Task SubmitOrder(string symbol, string side, decimal quantity, decimal price)
         {
@@ -56,42 +53,43 @@ namespace OrderGenerator.WebAPI.Hubs
             var validationError = OrderValidator.Validate(symbol, side, quantity, price);
             if (validationError != null)
             {
-                await Clients.Caller.SendAsync("OrderResult", new
+                await Clients.Caller.SendAsync("OrderResult", new SubmitOrderResponse
                 {
-                    success = false,
-                    status = "ERROR",
-                    error = validationError
+                    Success = false,
+                    Status = "ERROR",
+                    Error = validationError
                 });
                 return;
             }
 
             try
             {
-                var result = await _submissionService.SubmitOrderAsync(
-                    symbol,
-                    side,
-                    quantity,
-                    price,
-                    connectionId: Context.ConnectionId
-                );
-                
-                await Clients.Caller.SendAsync("OrderResult", new
+                var result = await _submissionService.SubmitOrderAsync(new OrderGenerator.Application.DTOs.SubmitOrder
                 {
-                    success = true,
-                    status = result.OrdStatus,
-                    clOrdId = result.ClOrdID,
-                    message = result.Message,
-                    timestamp = result.ReceivedAt
+                    Symbol = symbol,
+                    Side = side,
+                    Quantity = quantity,
+                    Price = price,
+                    ConnectionId = Context.ConnectionId
+                });
+                
+                await Clients.Caller.SendAsync("OrderResult", new SubmitOrderResponse
+                {
+                    Success = true,
+                    Status = result.OrdStatus,
+                    ClOrdId = result.ClOrdID,
+                    Message = result.Message,
+                    Timestamp = result.ReceivedAt
                 });
             }
             catch (Exception ex)
             {
                 _logger.LogError($"[SIGNALR-ERROR] SubmitOrder failed: {ex.Message}");
-                await Clients.Caller.SendAsync("OrderResult", new
+                await Clients.Caller.SendAsync("OrderResult", new SubmitOrderResponse
                 {
-                    success = false,
-                    status = "ERROR",
-                    error = $"Erro interno ao processar ordem: {ex.Message}"
+                    Success = false,
+                    Status = "ERROR",
+                    Error = $"Erro interno ao processar ordem: {ex.Message}"
                 });
             }
         }

@@ -1,4 +1,3 @@
-using System;
 using OrderGenerator.WebAPI.Models;
 
 namespace OrderGenerator.WebAPI.Validators

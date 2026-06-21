@@ -4,6 +4,7 @@ using OrderGenerator.Domain.Services;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using OrderGenerator.Application.DTOs;
 
 namespace OrderGenerator.Application.Services
 {
