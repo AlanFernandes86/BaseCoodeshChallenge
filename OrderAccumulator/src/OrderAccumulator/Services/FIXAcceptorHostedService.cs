@@ -48,45 +48,39 @@ namespace OrderAccumulator.Services
         {
             _logger.LogInformation("FIX Acceptor Service starting...");
 
-            // ── Step 1: Reconstruct exposure state from local FileStore ───────────────
-            // This reads the accumulator's own stored ExecutionReports (messages it SENT)
-            // and re-applies the exposure impact of each accepted order.
-            // No network call — purely local file I/O.
-            _logger.LogInformation("Reconstructing exposure state from local FIX FileStore...");
+            _logger.LogInformation("1 - Reconstructing exposure state from local FIX FileStore...");
             try
             {
-                int ordersReplayed = _reconstructor.Reconstruct(_exposureState, _settings);
-                _logger.LogInformation("Exposure state reconstructed from {Count} historical orders.", ordersReplayed);
+                int ordersReplayed = _reconstructor.Reconstruct();
+                _logger.LogInformation("1 - Exposure state reconstructed from {Count} historical orders.", ordersReplayed);
                 _exposureState.PrintState();
             }
             catch (Exception ex)
             {
-                // Non-fatal: log the error and continue with zeroed state.
-                // Better to start with a clean slate than to refuse to start entirely.
-                _logger.LogWarning(ex, "Failed to reconstruct exposure state from FileStore. Starting with zeroed state.");
+                _logger.LogError(ex, "1 - ❌ Failed to reconstruct exposure state: {Message}", ex.Message);
+                throw;
             }
 
-            // ── Step 2: Start the FIX Acceptor ────────────────────────────────────────
-            _logger.LogInformation("Starting FIX Acceptor...");
+            _logger.LogInformation("2 - Starting FIX Acceptor...");
             try
             {
                 var storeFactory = new FileStoreFactory(_settings);
                 _acceptor = new ThreadedSocketAcceptor(_application, storeFactory, _settings, (QuickFix.Logger.ILogFactory)null!);
                 _acceptor.Start();
-                _logger.LogInformation("✅ FIX Acceptor started successfully on configured port");
+                _logger.LogInformation("2 - ✅ FIX Acceptor started successfully on configured port");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Failed to start FIX Acceptor: {Message}", ex.Message);
+                _logger.LogError(ex, "2 - ❌ Failed to start FIX Acceptor: {Message}", ex.Message);
                 throw;
             }
-
+                
             return Task.CompletedTask;
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Stopping FIX Acceptor Service graciosamente...");
+            _logger.LogInformation("Stopping FIX Acceptor Service...");
             if (_acceptor != null)
             {
                 try

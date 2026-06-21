@@ -315,9 +315,8 @@ namespace OrderAccumulator.IntegratedTests
             // ── 4. RECONSTRUCT STATE (Start a new clean instance pointing to the same FileStore) ──
             var cleanState = new ExposureState();
             var reconstructSettings = new SessionSettings(AcceptorCfg2);
-            var reconstructor = new FIXStoreExposureReconstructor();
-            
-            int reconstructedCount = reconstructor.Reconstruct(cleanState, reconstructSettings);
+            var reconstructor = new FIXStoreExposureReconstructor(cleanState, reconstructSettings, Microsoft.Extensions.Logging.Abstractions.NullLogger<FIXStoreExposureReconstructor>.Instance);
+            int reconstructedCount = reconstructor.Reconstruct();
 
             // Verify that the accepted execution report was parsed and reconstructed
             Assert.Equal(1, reconstructedCount);

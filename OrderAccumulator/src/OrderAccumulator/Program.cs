@@ -20,10 +20,8 @@ namespace OrderAccumulator
 
             try
             {
-                // Create application host builder
                 var builder = Host.CreateApplicationBuilder(args);
 
-                // Load FIX configuration from bin directory
                 string fixConfigPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "fix.cfg");
                 if (!File.Exists(fixConfigPath))
                 {
@@ -34,23 +32,17 @@ namespace OrderAccumulator
                 builder.Services.AddSingleton(settings);
                 Console.WriteLine($"✅ FIX config loaded: {fixConfigPath}\n");
 
-                // Register core business state
                 builder.Services.AddSingleton<ExposureState>();
                 Console.WriteLine("✅ ExposureState registered\n");
 
-                // Register FIX application layer
                 builder.Services.AddSingleton<IApplication, FIXAcceptorApplication>();
                 Console.WriteLine("✅ FIXAcceptorApplication registered as IApplication\n");
 
-                // Register FileStore-based exposure state reconstructor
                 builder.Services.AddSingleton<FIXStoreExposureReconstructor>();
                 Console.WriteLine("✅ FIXStoreExposureReconstructor registered\n");
 
-                // Register the hosted background service
                 builder.Services.AddHostedService<FIXAcceptorHostedService>();
                 Console.WriteLine("✅ FIXAcceptorHostedService registered as HostedService\n");
-
-                Console.WriteLine("📡 Running Host. Ready. Waiting for FIX connections...\n");
 
                 var host = builder.Build();
                 await host.RunAsync();

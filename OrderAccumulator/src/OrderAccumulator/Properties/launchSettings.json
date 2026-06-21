@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "OrderAccumulator": {
+      "commandName": "Project",
+      "workingDirectory": "../../"
+    }
+  }
+}

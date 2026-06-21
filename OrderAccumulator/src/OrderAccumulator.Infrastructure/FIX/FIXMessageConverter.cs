@@ -97,7 +97,7 @@ namespace OrderAccumulator.Infrastructure.FIX
 
                 // Determine exec type and ord status based on acceptance
                 string execType = result.Accepted ? "0" : "8";         // '0'=NEW, '8'=REJECTED
-                string ordStatus = result.Accepted ? "2" : "8";        // '2'=FILLED, '8'=REJECTED
+                string ordStatus = result.Accepted ? "0" : "8";        // '0'=NEW, '8'=REJECTED
 
                 // Set required fields
                 execReport.SetField(new StringField(FIELD_ORDERID, result.OrderID));          // Field 37
@@ -106,9 +106,11 @@ namespace OrderAccumulator.Infrastructure.FIX
                 execReport.SetField(new StringField(FIELD_ORDSTATUS, ordStatus));             // Field 39
                 execReport.SetField(new StringField(FIELD_SYMBOL, symbol));                   // Field 55
                 execReport.SetField(new StringField(FIELD_SIDE, side.ToString()));            // Field 54
-                execReport.SetField(new DecimalField(FIELD_LEAVESQTY, result.Accepted ? 0 : orderQty));  // Field 151
-                execReport.SetField(new DecimalField(FIELD_CUMQTY, result.Accepted ? orderQty : 0));     // Field 14
-                execReport.SetField(new DecimalField(FIELD_AVGPX, result.Accepted ? incomingOrder.GetDecimal(FIELD_PRICE) : 0));  // Field 6
+                execReport.SetField(new DecimalField(FIELD_LEAVESQTY, orderQty));             // Field 151
+                execReport.SetField(new DecimalField(FIELD_CUMQTY, 0));                       // Field 14
+                execReport.SetField(new DecimalField(FIELD_AVGPX, 0));                        // Field 6
+                execReport.SetField(new DecimalField(FIELD_ORDERQTY, orderQty));              // Field 38
+                execReport.SetField(new DecimalField(FIELD_PRICE, incomingOrder.GetDecimal(FIELD_PRICE))); // Field 44
 
                 // Set optional fields
                 execReport.SetField(new StringField(FIELD_CLORDID, clOrdID));                 // Field 11
