@@ -12,10 +12,10 @@ namespace OrderAccumulator.Core
         public const decimal ExposureLimitReais = 100_000_000m;
 
         // Order side enumeration
-        public enum OrderSide
+        public static class OrderSide
         {
-            Buy = 1,   // FIX: Side = 1
-            Sell = 2   // FIX: Side = 2
+            public const char Buy = '1';   // FIX: Side = 1
+            public const char Sell = '2';  // FIX: Side = 2
         }
 
         // FIX ExecutionType values

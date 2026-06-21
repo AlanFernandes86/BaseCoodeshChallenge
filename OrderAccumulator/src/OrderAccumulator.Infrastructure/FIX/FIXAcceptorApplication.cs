@@ -1,10 +1,9 @@
-using System;
-using System.Collections.Generic;
+using Microsoft.Extensions.Logging;
+using OrderAccumulator.Core;
 using QuickFix;
 using QuickFix.Fields;
-using OrderAccumulator.Core;
-using OrderAccumulator.Core.Models;
-using static OrderAccumulator.Core.Constants;
+using System;
+using System.Threading;
 
 namespace OrderAccumulator.Infrastructure.FIX
 {
@@ -18,38 +17,36 @@ namespace OrderAccumulator.Infrastructure.FIX
     /// </summary>
     public class FIXAcceptorApplication : IApplication
     {
+        private readonly ILogger<FIXAcceptorApplication> _logger;
         private readonly ExposureState _exposureState;
-        private readonly FIXMessageConverter _converter;
         private static int _execIDCounter = 0;
 
-        public FIXAcceptorApplication(ExposureState exposureState)
+        public FIXAcceptorApplication(ExposureState exposureState, ILogger<FIXAcceptorApplication> logger)
         {
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _exposureState = exposureState ?? throw new ArgumentNullException(nameof(exposureState));
-            _converter = new FIXMessageConverter();
         }
 
         public void OnCreate(SessionID sessionID)
         {
-            Console.WriteLine($"[FIX] Session created: {sessionID}");
+            _logger.LogInformation($"[FIX] Session created: {sessionID}");
         }
 
         public void OnLogon(SessionID sessionID)
         {
-            Console.WriteLine($"[FIX] ✅ Logon completed: {sessionID}");
-            // State was already reconstructed from FileStore before the Acceptor started.
-            // Nothing to do here.
+            _logger.LogInformation($"[FIX] ✅ Logon completed: {sessionID}");
         }
 
         public void OnLogout(SessionID sessionID)
         {
-            Console.WriteLine($"[FIX] ❌ Logout: {sessionID}");
+            _logger.LogInformation($"[FIX] ❌ Logout: {sessionID}");
         }
 
-        public void FromAdmin(QuickFix.Message msg, SessionID sessionID)
+        public void FromAdmin(Message msg, SessionID sessionID)
         {
             string msgType = msg.Header.GetString(Tags.MsgType);
             string seqNum  = msg.Header.GetString(Tags.MsgSeqNum);
-            Console.WriteLine($"[FIX-ADMIN] 📬 Received admin message: MsgType={msgType} | SeqNum={seqNum}");
+            _logger.LogInformation($"[FIX-ADMIN] 📬 Received admin message: MsgType={msgType} | SeqNum={seqNum}");
         }
 
         /// <summary>
@@ -60,7 +57,7 @@ namespace OrderAccumulator.Infrastructure.FIX
         /// - Their exposure was already reconstructed from the FileStore at startup
         /// - Re-applying them would double-count exposure
         /// </summary>
-        public void FromApp(QuickFix.Message msg, SessionID sessionID)
+        public void FromApp(Message msg, SessionID sessionID)
         {
             try
             {
@@ -69,63 +66,41 @@ namespace OrderAccumulator.Infrastructure.FIX
 
                 if (!msgType.Equals("D"))
                 {
-                    Console.WriteLine($"[FIX] ⚠️ Unhandled MsgType in FromApp: {msgType}");
-                    return;
-                }
-
-                // Detect replayed messages (PossDupFlag=Y from backend during session recovery)
-                bool isPossDup = msg.Header.IsSetField(Tags.PossDupFlag)
-                                 && msg.Header.GetString(Tags.PossDupFlag) == "Y";
-
-                if (isPossDup)
-                {
-                    // State was already reconstructed from FileStore — do NOT re-apply.
-                    string clOrdId = msg.IsSetField(11) ? msg.GetString(11) : "?";
-                    Console.WriteLine($"[FIX] ♻️  Ignored replayed NewOrderSingle [{seqNum}] ClOrdID={clOrdId} (PossDupFlag=Y)");
+                    _logger.LogWarning($"[FIX] ⚠️ Unhandled MsgType in FromApp: {msgType}");
                     return;
                 }
 
                 // Live order — parse, evaluate, respond
-                var orderInfo = _converter.ParseNewOrderSingle(msg);
-                Console.WriteLine($"[FIX] 📨 NewOrderSingle [{seqNum}]: " +
-                                  $"{orderInfo.Symbol} {orderInfo.Side} x{orderInfo.Quantity} @ {orderInfo.Price} " +
-                                  $"(ClOrdID={orderInfo.ClOrdID})");
-
+                var orderInfo = msg.ToOrderInfo();
                 var result  = _exposureState.TryProcessOrder(orderInfo);
                 string execID = GenerateExecID();
-                var execReport = _converter.BuildExecutionReport(msg, result, execID);
+                var execReport = msg.ToExecutionReport(result, execID);
                 Session.SendToTarget(execReport, sessionID);
 
                 if (result.Accepted)
-                    Console.WriteLine($"[FIX] ✅ ACCEPTED OrderID={result.OrderID}, Exposure={result.ResultingExposure:C}");
+                    _logger.LogInformation($"[FIX] ✅ ACCEPTED OrderID={result.OrderID}, Exposure={result.ResultingExposure:C}");
                 else
-                    Console.WriteLine($"[FIX] ❌ REJECTED {result.RejectReason}");
+                    _logger.LogWarning($"[FIX] ❌ REJECTED {result.RejectReason}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[FIX-ERROR] Exception in FromApp: {ex.Message}\n{ex.StackTrace}");
+                _logger.LogError(ex, "[FIX-ERROR] Exception in FromApp: {Message}", ex.Message);
             }
         }
 
-        public void ToApp(QuickFix.Message msg, SessionID sessionID)
+        public void ToApp(Message msg, SessionID sessionID)
         {
             string msgType = msg.Header.GetString(Tags.MsgType);
-            Console.WriteLine($"[FIX-TOAPP] 📤 Outbound app message: MsgType={msgType}");
+            _logger.LogInformation($"[FIX-TOAPP] 📤 Outbound app message: MsgType={msgType}");
         }
 
-        public void ToAdmin(QuickFix.Message msg, SessionID sessionID)
+        public void ToAdmin(Message msg, SessionID sessionID)
         {
             string msgType = msg.Header.GetString(Tags.MsgType);
-            Console.WriteLine($"[FIX-TOADMIN] 📤 Outbound admin message: MsgType={msgType}");
+            _logger.LogInformation($"[FIX-TOADMIN] 📤 Outbound admin message: MsgType={msgType}");
         }
 
-        private string GenerateExecID()
-        {
-            lock (typeof(FIXAcceptorApplication))
-            {
-                _execIDCounter++;
-                return $"EXEC-{DateTime.UtcNow:yyyyMMdd}-{_execIDCounter:D6}";
-            }
-        }
+        private string GenerateExecID() =>
+            $"EXEC-{DateTime.UtcNow:yyyyMMdd}-{Interlocked.Increment(ref _execIDCounter):D6}";
     }
 }

@@ -25,6 +25,11 @@ namespace OrderAccumulator.IntegratedTests
         
         private const string AcceptorCfg2 = "fix_test_acceptor_2.cfg";
         private const string InitiatorCfg2 = "fix_test_initiator_2.cfg";
+        
+        private const string AcceptorCfg3 = "fix_test_acceptor_3.cfg";
+        private const string InitiatorCfg3 = "fix_test_initiator_3.cfg";
+        
+
 
         public IntegratedTests()
         {
@@ -36,6 +41,11 @@ namespace OrderAccumulator.IntegratedTests
             
             CreateConfigFile(AcceptorCfg2, "acceptor", "127.0.0.1", 10004, "./store_acceptor_2", "./log_acceptor_2", "ACCUMULATOR", "BACKEND");
             CreateConfigFile(InitiatorCfg2, "initiator", "127.0.0.1", 10004, "./store_initiator_2", "./log_initiator_2", "BACKEND", "ACCUMULATOR");
+
+            CreateConfigFile(AcceptorCfg3, "acceptor", "127.0.0.1", 10005, "./store_acceptor_3", "./log_acceptor_3", "ACCUMULATOR", "BACKEND");
+            CreateConfigFile(InitiatorCfg3, "initiator", "127.0.0.1", 10005, "./store_initiator_3", "./log_initiator_3", "BACKEND", "ACCUMULATOR");
+
+
         }
 
         public void Dispose()
@@ -55,10 +65,17 @@ namespace OrderAccumulator.IntegratedTests
             CleanDirectory("./store_initiator_2");
             CleanDirectory("./log_initiator_2");
 
+            CleanDirectory("./store_acceptor_3");
+            CleanDirectory("./log_acceptor_3");
+            CleanDirectory("./store_initiator_3");
+            CleanDirectory("./log_initiator_3");
+            
             DeleteFile(AcceptorCfg1);
             DeleteFile(InitiatorCfg1);
             DeleteFile(AcceptorCfg2);
             DeleteFile(InitiatorCfg2);
+            DeleteFile(AcceptorCfg3);
+            DeleteFile(InitiatorCfg3);
         }
 
         private static void CleanDirectory(string path)
@@ -133,7 +150,7 @@ namespace OrderAccumulator.IntegratedTests
 
             // Start FIX Acceptor
             var acceptorSettings = new SessionSettings(AcceptorCfg1);
-            var acceptorApp = new FIXAcceptorApplication(exposureState);
+            var acceptorApp = new FIXAcceptorApplication(exposureState, Microsoft.Extensions.Logging.Abstractions.NullLogger<FIXAcceptorApplication>.Instance);
             var acceptorStoreFactory = new FileStoreFactory(acceptorSettings);
             var acceptorLogFactory = new FileLogFactory(acceptorSettings);
             var acceptor = new ThreadedSocketAcceptor(acceptorApp, acceptorStoreFactory, acceptorSettings, acceptorLogFactory);
@@ -241,7 +258,7 @@ namespace OrderAccumulator.IntegratedTests
             await apiApp.StartAsync();
 
             var acceptorSettings = new SessionSettings(AcceptorCfg2);
-            var acceptorApp = new FIXAcceptorApplication(exposureState);
+            var acceptorApp = new FIXAcceptorApplication(exposureState, Microsoft.Extensions.Logging.Abstractions.NullLogger<FIXAcceptorApplication>.Instance);
             var acceptorStoreFactory = new FileStoreFactory(acceptorSettings);
             var acceptorLogFactory = new FileLogFactory(acceptorSettings);
             var acceptor = new ThreadedSocketAcceptor(acceptorApp, acceptorStoreFactory, acceptorSettings, acceptorLogFactory);
@@ -343,6 +360,96 @@ namespace OrderAccumulator.IntegratedTests
             {
                 await newApiApp.StopAsync();
                 await newApiApp.DisposeAsync();
+            }
+        }
+
+        [Fact]
+        public async Task Test_UnprocessedMessageReplayedDuringCrashIsProcessed()
+        {
+            // ── 1. SETUP SUT (Accumulator 3: ExposureState + FIX Acceptor + Fake Web API) ──
+            var exposureState = new ExposureState();
+
+            var apiBuilder = WebApplication.CreateBuilder();
+            apiBuilder.Services.AddSingleton(exposureState);
+            var apiApp = apiBuilder.Build();
+            apiApp.Urls.Add("http://127.0.0.1:5003");
+
+            apiApp.MapGet("/api/exposure/{symbol}", (string symbol, ExposureState state) =>
+            {
+                return Results.Ok(state.GetExposure(symbol));
+            });
+
+            await apiApp.StartAsync();
+
+            var acceptorSettings = new SessionSettings(AcceptorCfg3);
+            var acceptorApp = new FIXAcceptorApplication(exposureState, Microsoft.Extensions.Logging.Abstractions.NullLogger<FIXAcceptorApplication>.Instance);
+            var acceptorStoreFactory = new FileStoreFactory(acceptorSettings);
+            var acceptorLogFactory = new FileLogFactory(acceptorSettings);
+            var acceptor = new ThreadedSocketAcceptor(acceptorApp, acceptorStoreFactory, acceptorSettings, acceptorLogFactory);
+            
+            acceptor.Start();
+
+            // ── 2. SETUP SIMULATED INITIATOR (Fake Backend client) ──
+            var initiatorSettings = new SessionSettings(InitiatorCfg3);
+            var initiatorApp = new TestInitiatorApplication();
+            var initiatorStoreFactory = new FileStoreFactory(initiatorSettings);
+            var initiatorLogFactory = new FileLogFactory(initiatorSettings);
+            var initiator = new SocketInitiator(initiatorApp, initiatorStoreFactory, initiatorSettings, initiatorLogFactory);
+
+            initiator.Start();
+
+            try
+            {
+                await initiatorApp.WaitForLogonAsync(TimeSpan.FromSeconds(10));
+                Assert.NotNull(initiatorApp.Session);
+
+                // ── 3. SEND ORDER WITH PossDupFlag='Y' BUT AT EXPECTED SEQNUM (Case B) ──
+                // Since this is the first message (SeqNum=1), it matches what the acceptor expects.
+                // It represents a message replayed during connection recovery that was NOT processed previously (Case B).
+                var order = new QuickFix.Message();
+                order.Header.SetField(new StringField(Tags.MsgType, "D"));
+                order.Header.SetField(new StringField(Tags.PossDupFlag, "Y")); // Flagged as re-send
+                order.SetField(new StringField(Tags.ClOrdID, "CLT-TEST-CASEB-01"));
+                order.SetField(new StringField(Tags.Symbol, "PETR4"));
+                order.SetField(new StringField(Tags.Side, "1")); // Buy
+                order.SetField(new DecimalField(Tags.OrderQty, 200m));
+                order.SetField(new DecimalField(Tags.Price, 15.0m)); // 200 * 15 = R$ 3,000
+                order.SetField(new StringField(Tags.OrdType, "2")); // Limit
+                order.SetField(new StringField(Tags.TransactTime, DateTime.UtcNow.ToString("yyyyMMdd-HH:mm:ss")));
+
+                Session.SendToTarget(order, initiatorApp.Session);
+
+                // Wait for the exposure to be populated
+                using var httpClient = new HttpClient();
+                decimal petr4Exposure = 0m;
+                bool apiReflectedNewState = false;
+
+                for (int i = 0; i < 50; i++)
+                {
+                    var response = await httpClient.GetAsync("http://127.0.0.1:5003/api/exposure/PETR4");
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var content = await response.Content.ReadAsStringAsync();
+                        petr4Exposure = decimal.Parse(content, CultureInfo.InvariantCulture);
+                        if (petr4Exposure == 3000m)
+                        {
+                            apiReflectedNewState = true;
+                            break;
+                        }
+                    }
+                    await Task.Delay(100);
+                }
+
+                Assert.True(apiReflectedNewState, $"Expected exposure R$ 3,000 for PETR4 but got: {petr4Exposure}");
+            }
+            finally
+            {
+                initiator.Stop();
+                initiator.Dispose();
+                acceptor.Stop();
+                acceptor.Dispose();
+                await apiApp.StopAsync();
+                await apiApp.DisposeAsync();
             }
         }
     }
