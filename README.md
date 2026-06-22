@@ -1,26 +1,41 @@
-# Project Empty Template
+# FIX Order System
 
-Este é um repositório de exemplo para você começar a desenvolver a questão, leia com atenção os requisitos do enunciado da questão na plataforma e seguia as boas práticas sobre como utilizar este repositório.
+Um sistema de acumulação de ordens financeiras com limite de exposição por ativo comunicando-se via protocolo FIX 4.4, com interface web em React e backend em .NET.
 
+## Tecnologias Usadas
 
-## Readme do Repositório
+- **Linguagens:** C#, TypeScript, HTML/CSS
+- **Backend:** .NET (ASP.NET Core, Worker Services), SignalR
+- **Protocolo:** QuickFIX/n (FIX 4.4)
+- **Frontend:** React, Vite
+- **Infraestrutura:** Docker, Docker Compose
 
-- Deve conter o título do projeto
-- Uma descrição sobre o projeto em frase
-- Deve conter uma lista com linguagem, framework e/ou tecnologias usadas
-- Como instalar e usar o projeto (instruções)
-- Não esqueça o [.gitignore](https://www.toptal.com/developers/gitignore)
-- Se está usando github pessoal, referencie que é um challenge by coodesh:  
+## Como Instalar e Usar
+
+**Pré-requisitos:**
+- Docker e Docker Compose instalados em sua máquina.
+
+**Instruções de execução:**
+
+1. Clone o repositório para a sua máquina e acesse a pasta raiz do projeto:
+   ```bash
+   git clone <url-do-repositorio>
+   cd BaseCoodeshChallenge
+   ```
+
+2. Faça o build e inicie os containers com o Docker Compose:
+   ```bash
+   docker-compose up --build
+   ```
+
+3. Acesse o front no seu navegador:
+   - **Frontend (Interface do Usuário):** [http://localhost:5173](http://localhost:5173)
+
+O ambiente inicia os três componentes principais:
+- **OrderAccumulator (`9999`):** Aceita conexões FIX, recebe as ordens e calcula a exposição de risco (simulada).
+- **OrderGenerator.Backend (`5000`):** API e servidor SignalR que envia as ordens criadas pelo usuário via FIX para o Accumulator.
+- **OrderGenerator.Frontend (`5173`):** Aplicação visual que interage com o Backend para emitir e acompanhar os status das ordens em tempo real.
+
+---
 
 >  This is a challenge by [Coodesh](https://coodesh.com/)
-
-## Finalização e Instruções para a Apresentação
-
-1. Adicione o link do repositório com a sua solução na questão na plataforma
-2. Verifique se o Readme está bom e faça o commit final em seu repositório;
-3. Envie e aguarde as instruções para seguir. Caso o teste tenha apresentação de vídeo, dentro da tela de entrega será possível gravar após adicionar o link do repositório. Sucesso e boa sorte. =)
-
-
-## Suporte
-
-Para tirar dúvidas sobre o processo envie uma mensagem diretamente a um especialista no chat da plataforma.
