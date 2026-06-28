@@ -38,9 +38,12 @@ namespace OrderGenerator.Application.Services
         {
             try
             {
-                _logger.LogInformation($"[HANDLE-EXEC-REPORT] Broadcasting execution report for ClOrdID {report.ClOrdID}");
+                _logger.LogInformation($"[HANDLE-EXEC-REPORT] Processing execution report for ClOrdID {report.ClOrdID}");
                 
-                await _hubContext.Clients.All.SendAsync("OrderResult", new SubmitOrderResponse
+                var parts = report.ClOrdID.Split('_');
+                string connectionId = parts.Length > 1 ? parts.Last() : string.Empty;
+
+                var response = new SubmitOrderResponse
                 {
                     Success = report.IsAccepted,
                     Status = report.OrdStatus == "8" ? "REJECTED" : report.IsAccepted ? "ACCEPTED" : report.OrdStatus,
@@ -48,7 +51,17 @@ namespace OrderGenerator.Application.Services
                     ClOrdId = report.ClOrdID,
                     Message = report.Text,
                     Timestamp = report.ReceivedAt
-                });
+                };
+
+                if (!string.IsNullOrEmpty(connectionId))
+                {
+                    await _hubContext.Clients.Client(connectionId).SendAsync("OrderResult", response);
+                }
+                else
+                {
+                    // Fallback to All if connectionId is not present
+                    await _hubContext.Clients.All.SendAsync("OrderResult", response);
+                }
             }
             catch (Exception ex)
             {

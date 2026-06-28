@@ -35,6 +35,9 @@ namespace OrderAccumulator
                 builder.Services.AddSingleton<ExposureState>();
                 Console.WriteLine("✅ ExposureState registered\n");
 
+                builder.Services.AddSingleton<FIXAcceptorHandler>();
+                Console.WriteLine("✅ FIXAcceptorHandler (Ring Buffer) registered\n");
+
                 builder.Services.AddSingleton<IApplication, FIXAcceptorApplication>();
                 Console.WriteLine("✅ FIXAcceptorApplication registered as IApplication\n");
 

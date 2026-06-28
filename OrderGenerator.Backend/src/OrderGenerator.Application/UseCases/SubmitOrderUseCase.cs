@@ -26,7 +26,7 @@ namespace OrderGenerator.Application.UseCases
 
         public async Task<OrderSubmissionResult> SubmitOrderAsync(SubmitOrder dto)
         {
-            string clOrdID = _orderTracker.GenerateClientOrderID();
+            string clOrdID = _orderTracker.GenerateClientOrderID(dto.ConnectionId);
 
             if (!_submissionService.IsReady)
             {

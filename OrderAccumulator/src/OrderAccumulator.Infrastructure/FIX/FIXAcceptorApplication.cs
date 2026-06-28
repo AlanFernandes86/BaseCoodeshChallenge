@@ -18,13 +18,12 @@ namespace OrderAccumulator.Infrastructure.FIX
     public class FIXAcceptorApplication : IApplication
     {
         private readonly ILogger<FIXAcceptorApplication> _logger;
-        private readonly ExposureState _exposureState;
-        private static int _execIDCounter = 0;
+        private readonly FIXAcceptorHandler _handler;
 
-        public FIXAcceptorApplication(ExposureState exposureState, ILogger<FIXAcceptorApplication> logger)
+        public FIXAcceptorApplication(FIXAcceptorHandler handler, ILogger<FIXAcceptorApplication> logger)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _exposureState = exposureState ?? throw new ArgumentNullException(nameof(exposureState));
+            _handler = handler ?? throw new ArgumentNullException(nameof(handler));
         }
 
         public void OnCreate(SessionID sessionID)
@@ -62,25 +61,15 @@ namespace OrderAccumulator.Infrastructure.FIX
             try
             {
                 string msgType = msg.Header.GetString(Tags.MsgType);
-                string seqNum  = msg.Header.GetString(Tags.MsgSeqNum);
-
+                
                 if (!msgType.Equals("D"))
                 {
                     _logger.LogWarning($"[FIX] ⚠️ Unhandled MsgType in FromApp: {msgType}");
                     return;
                 }
 
-                // Live order — parse, evaluate, respond
                 var orderInfo = msg.ToOrderInfo();
-                var result  = _exposureState.TryProcessOrder(orderInfo);
-                string execID = GenerateExecID();
-                var execReport = msg.ToExecutionReport(result, execID);
-                Session.SendToTarget(execReport, sessionID);
-
-                if (result.Accepted)
-                    _logger.LogInformation($"[FIX] ✅ ACCEPTED OrderID={result.OrderID}, Exposure={result.ResultingExposure:C}");
-                else
-                    _logger.LogWarning($"[FIX] ❌ REJECTED {result.RejectReason}");
+                _handler.Produce(orderInfo, msg, sessionID);
             }
             catch (Exception ex)
             {
@@ -99,8 +88,5 @@ namespace OrderAccumulator.Infrastructure.FIX
             string msgType = msg.Header.GetString(Tags.MsgType);
             _logger.LogInformation($"[FIX-TOADMIN] 📤 Outbound admin message: MsgType={msgType}");
         }
-
-        private string GenerateExecID() =>
-            $"EXEC-{DateTime.UtcNow:yyyyMMdd}-{Interlocked.Increment(ref _execIDCounter):D6}";
     }
 }

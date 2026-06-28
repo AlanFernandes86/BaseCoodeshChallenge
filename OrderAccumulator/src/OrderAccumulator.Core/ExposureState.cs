@@ -33,26 +33,23 @@ namespace OrderAccumulator.Core
         {
             decimal impact = orderInfo.CalculateExposureImpact();
 
-            lock (_stateLock)
+            _orderIdCounter++;
+            string dateStr = DateTime.UtcNow.ToString("yyyyMMdd");
+            string orderId = $"ORD-{dateStr}-{_orderIdCounter:D6}";
+
+            decimal currentExposure = _exposures.TryGetValue(orderInfo.Symbol, out var exp) ? exp : 0m;
+            decimal newExposure = currentExposure + impact;
+
+            if (Math.Abs(newExposure) > Constants.ExposureLimitReais)
             {
-                _orderIdCounter++;
-                string dateStr = DateTime.UtcNow.ToString("yyyyMMdd");
-                string orderId = $"ORD-{dateStr}-{_orderIdCounter:D6}";
-
-                decimal currentExposure = _exposures.TryGetValue(orderInfo.Symbol, out var exp) ? exp : 0m;
-                decimal newExposure = currentExposure + impact;
-
-                if (Math.Abs(newExposure) > Constants.ExposureLimitReais)
-                {
-                    var rejectReason = $"Exposure limit exceeded. Current: {currentExposure:C}, " +
-                                      $"Impact: {impact:C}, Would be: {newExposure:C}. " +
-                                      $"Limit: ±{Constants.ExposureLimitReais:C}";
-                    return ProcessingResult.CreateRejected(orderId, rejectReason, currentExposure);
-                }
-
-                _exposures[orderInfo.Symbol] = newExposure;
-                return ProcessingResult.CreateAccepted(orderId, newExposure);
+                var rejectReason = $"Exposure limit exceeded. Current: {currentExposure:C}, " +
+                                  $"Impact: {impact:C}, Would be: {newExposure:C}. " +
+                                  $"Limit: ±{Constants.ExposureLimitReais:C}";
+                return ProcessingResult.CreateRejected(orderId, rejectReason, currentExposure);
             }
+
+            _exposures[orderInfo.Symbol] = newExposure;
+            return ProcessingResult.CreateAccepted(orderId, newExposure);
         }
 
         /// <summary>

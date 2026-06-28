@@ -11,6 +11,6 @@ namespace OrderGenerator.Application.Services
     public interface IOrderTracker
     {
         ConcurrentQueue<OutboxOrder> OutboxQueue { get; }
-        string GenerateClientOrderID();
+        string GenerateClientOrderID(string connectionId);
     }
 }

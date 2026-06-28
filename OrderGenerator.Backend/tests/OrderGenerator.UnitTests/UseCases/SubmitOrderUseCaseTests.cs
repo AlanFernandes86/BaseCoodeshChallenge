@@ -25,7 +25,7 @@ namespace OrderGenerator.UnitTests.UseCases
             _mockLogger = new Mock<ILogger<SubmitOrderUseCase>>();
 
             // Setup default client order ID generation
-            _mockOrderTracker.Setup(x => x.GenerateClientOrderID()).Returns("CLT-20260621-000001");
+            _mockOrderTracker.Setup(x => x.GenerateClientOrderID(It.IsAny<string>())).Returns("CLT-20260621-000001_conn-1");
             _mockOrderTracker.Setup(x => x.OutboxQueue).Returns(new System.Collections.Concurrent.ConcurrentQueue<OutboxOrder>());
 
             _useCase = new SubmitOrderUseCase(
@@ -64,7 +64,7 @@ namespace OrderGenerator.UnitTests.UseCases
 
             // Assert
             result.Should().NotBeNull();
-            result.ClOrdID.Should().Be("CLT-20260621-000001");
+            result.ClOrdID.Should().Be("CLT-20260621-000001_conn-1");
             result.IsAccepted.Should().BeFalse();
             result.OrdStatus.Should().Be("PENDING");
             result.Message.Should().Contain("enfileirada pois o servidor de exposição está offline");
@@ -74,7 +74,7 @@ namespace OrderGenerator.UnitTests.UseCases
             _mockOrderTracker.Object.OutboxQueue.Count.Should().Be(1);
             _mockOrderTracker.Object.OutboxQueue.TryPeek(out var outboxOrder).Should().BeTrue();
             outboxOrder.Should().NotBeNull();
-            outboxOrder!.ClOrdID.Should().Be("CLT-20260621-000001");
+            outboxOrder!.ClOrdID.Should().Be("CLT-20260621-000001_conn-1");
             outboxOrder.Symbol.Should().Be("PETR4");
 
             // Verify FIX Send was never called
@@ -102,7 +102,7 @@ namespace OrderGenerator.UnitTests.UseCases
 
             // Assert
             result.Should().NotBeNull();
-            result.ClOrdID.Should().Be("CLT-20260621-000001");
+            result.ClOrdID.Should().Be("CLT-20260621-000001_conn-1");
             result.IsAccepted.Should().BeFalse();
             result.OrdStatus.Should().Be("PENDING");
             result.Message.Should().Contain("Ordem enviada para o servidor de exposição");
@@ -113,7 +113,7 @@ namespace OrderGenerator.UnitTests.UseCases
 
             // Verify FIX Send was called once with exact arguments
             _mockSubmissionService.Verify(x => x.SendNewOrderSingle(
-                "VALE3", "Sell", 1000, 65.00m, "CLT-20260621-000001"), Times.Once);
+                "VALE3", "Sell", 1000, 65.00m, "CLT-20260621-000001_conn-1"), Times.Once);
         }
 
         [Fact]
@@ -139,7 +139,7 @@ namespace OrderGenerator.UnitTests.UseCases
 
             // Assert
             result.Should().NotBeNull();
-            result.ClOrdID.Should().Be("CLT-20260621-000001");
+            result.ClOrdID.Should().Be("CLT-20260621-000001_conn-1");
             result.IsAccepted.Should().BeFalse();
             result.OrdStatus.Should().Be("8");
             result.Message.Should().Contain("FIX submission error: FIX session dropped during transmission");

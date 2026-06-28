@@ -11,10 +11,10 @@ namespace OrderGenerator.Application.Services
 
         public ConcurrentQueue<OutboxOrder> OutboxQueue { get; } = new();
 
-        public string GenerateClientOrderID()
+        public string GenerateClientOrderID(string connectionId)
         {
             long orderId = Interlocked.Increment(ref _orderCounter);
-            return $"CLT-{DateTime.UtcNow:yyyyMMdd}-{orderId:D6}";
+            return $"CLT-{DateTime.UtcNow:yyyyMMdd}-{orderId:D6}_{connectionId}";
         }
     }
 }
