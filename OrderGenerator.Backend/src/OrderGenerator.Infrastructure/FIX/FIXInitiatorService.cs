@@ -6,6 +6,9 @@ using QuickFix.Fields;
 using QuickFix.Store;
 using QuickFix.Transport;
 using System;
+using System.Threading;
+using System.Threading.Channels;
+using System.Threading.Tasks;
 
 namespace OrderGenerator.Infrastructure.FIX
 {
@@ -19,6 +22,9 @@ namespace OrderGenerator.Infrastructure.FIX
         private SocketInitiator? _initiator;
         private readonly object _lock = new object();
         private readonly ILogger<FIXInitiatorService> _logger;
+        
+        private readonly Channel<Message> _channel;
+        private readonly Thread _consumerThread;
         
         public event EventHandler<ExecutionReportData>? ExecutionReportReceived;
 
@@ -36,6 +42,46 @@ namespace OrderGenerator.Infrastructure.FIX
         public FIXInitiatorService(ILogger<FIXInitiatorService> logger)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            
+            // Unbounded channel para não bloquear as threads do SignalR nunca
+            _channel = Channel.CreateUnbounded<Message>(new UnboundedChannelOptions
+            {
+                SingleReader = true,
+                SingleWriter = false
+            });
+            
+            _consumerThread = new Thread(ConsumeChannelLoop)
+            {
+                IsBackground = true,
+                Name = "FIXSendToTargetConsumer",
+                Priority = ThreadPriority.Highest
+            };
+            _consumerThread.Start();
+        }
+
+        private async void ConsumeChannelLoop()
+        {
+            try
+            {
+                while (await _channel.Reader.WaitToReadAsync())
+                {
+                    while (_channel.Reader.TryRead(out var msg))
+                    {
+                        var sessionId = _sessionID;
+                        if (sessionId != null)
+                        {
+                            var sw = System.Diagnostics.Stopwatch.StartNew();
+                            Session.SendToTarget(msg, sessionId);
+                            sw.Stop();
+                            OrderGenerator.Application.Services.PerformanceMonitor.Record("1. FIX_SendToTarget", sw.ElapsedTicks);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[FIX-INITIATOR] Consumer thread failed!");
+            }
         }
 
         /// <summary>
@@ -111,15 +157,10 @@ namespace OrderGenerator.Infrastructure.FIX
                 order.SetField(new StringField(40, "2"));          // OrdType = 2 (Limit)
                 order.SetField(new StringField(60, DateTime.UtcNow.ToString("yyyyMMdd-HH:mm:ss")));  // TransactTime (field 60)
 
-                var sw = System.Diagnostics.Stopwatch.StartNew();
-                bool sendResult = Session.SendToTarget(order, _sessionID);
-                sw.Stop();
-                OrderGenerator.Application.Services.PerformanceMonitor.Record("1. FIX_SendToTarget", sw.ElapsedTicks);
-
-                _logger.LogInformation($"[FIX-INITIATOR] ✅ SendToTarget result: {sendResult}");
-                if (!sendResult)
+                // Enfileira na memória RAM instantaneamente (sem travar a thread web)
+                if (!_channel.Writer.TryWrite(order))
                 {
-                    _logger.LogWarning($"[FIX-INITIATOR] ⚠️ SendToTarget returned FALSE!");
+                    _logger.LogWarning($"[FIX-INITIATOR] ⚠️ Failed to write to channel!");
                 }
             }
             catch (Exception ex)
