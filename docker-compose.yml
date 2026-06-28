@@ -6,8 +6,8 @@ services:
     ports:
       - "9999:9999"
     volumes:
-      - ./OrderAccumulator/store:/app/store
-      - ./OrderAccumulator/log:/app/log
+      - accumulator_store:/app/store
+      - accumulator_log:/app/log
     networks:
       - fix-network
     environment:
@@ -33,8 +33,8 @@ services:
       - LANGUAGE=pt_BR:pt
       - LC_ALL=pt_BR.UTF-8
     volumes:
-      - ./OrderGenerator.Backend/store:/app/store
-      - ./OrderGenerator.Backend/log:/app/log
+      - backend_store:/app/store
+      - backend_log:/app/log
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
@@ -57,3 +57,9 @@ services:
 networks:
   fix-network:
     driver: bridge
+
+volumes:
+  accumulator_store:
+  accumulator_log:
+  backend_store:
+  backend_log:

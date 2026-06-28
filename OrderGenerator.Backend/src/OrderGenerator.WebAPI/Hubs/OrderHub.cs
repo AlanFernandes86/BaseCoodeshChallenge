@@ -64,6 +64,7 @@ namespace OrderGenerator.WebAPI.Hubs
 
             try
             {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
                 var result = await _submissionService.SubmitOrderAsync(new OrderGenerator.Application.DTOs.SubmitOrder
                 {
                     Symbol = symbol,
@@ -73,6 +74,9 @@ namespace OrderGenerator.WebAPI.Hubs
                     ConnectionId = Context.ConnectionId
                 });
                 
+                sw.Stop();
+                OrderGenerator.Application.Services.PerformanceMonitor.Record("0. SignalR_Incoming_Total", sw.ElapsedTicks);
+
                 await Clients.Caller.SendAsync("OrderResult", new SubmitOrderResponse
                 {
                     Success = true,

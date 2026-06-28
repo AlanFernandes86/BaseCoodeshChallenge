@@ -45,6 +45,7 @@ namespace OrderAccumulator.Infrastructure.FIX
             while (nextSequence - Volatile.Read(ref _consumerSequence) >= Capacity)
             {
                 Thread.SpinWait(10);
+                Console.WriteLine("Waiting for buffer to be ready");
             }
 
             int index = (int)(nextSequence & Mask);

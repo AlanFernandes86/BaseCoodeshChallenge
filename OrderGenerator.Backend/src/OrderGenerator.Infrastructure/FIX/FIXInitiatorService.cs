@@ -111,8 +111,11 @@ namespace OrderGenerator.Infrastructure.FIX
                 order.SetField(new StringField(40, "2"));          // OrdType = 2 (Limit)
                 order.SetField(new StringField(60, DateTime.UtcNow.ToString("yyyyMMdd-HH:mm:ss")));  // TransactTime (field 60)
 
-                // Send to Accumulator
+                var sw = System.Diagnostics.Stopwatch.StartNew();
                 bool sendResult = Session.SendToTarget(order, _sessionID);
+                sw.Stop();
+                OrderGenerator.Application.Services.PerformanceMonitor.Record("1. FIX_SendToTarget", sw.ElapsedTicks);
+
                 _logger.LogInformation($"[FIX-INITIATOR] ✅ SendToTarget result: {sendResult}");
                 if (!sendResult)
                 {

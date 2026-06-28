@@ -36,6 +36,8 @@ namespace OrderGenerator.Application.Services
 
         private async void OnExecutionReportReceived(object? sender, ExecutionReportData report)
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            
             try
             {
                 _logger.LogInformation($"[HANDLE-EXEC-REPORT] Processing execution report for ClOrdID {report.ClOrdID}");
@@ -62,6 +64,9 @@ namespace OrderGenerator.Application.Services
                     // Fallback to All if connectionId is not present
                     await _hubContext.Clients.All.SendAsync("OrderResult", response);
                 }
+                
+                sw.Stop();
+                OrderGenerator.Application.Services.PerformanceMonitor.Record("2. SignalR_Reply_Send", sw.ElapsedTicks);
             }
             catch (Exception ex)
             {
